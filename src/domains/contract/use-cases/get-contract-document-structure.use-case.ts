@@ -12,6 +12,7 @@ export interface ContractDocumentStructureItem {
   documentSubtypeId: string;
   documentSubtypeName: string;
   isComplete: boolean;
+  requiredForContract: boolean;
 }
 
 export interface ContractDocumentStructureFilters extends DocumentModelContractFilters {
@@ -55,6 +56,7 @@ export class GetContractDocumentStructureUseCase {
       documentSubtypeId: model.documentSubtypeId,
       documentSubtypeName: model.documentSubtypeName ?? '',
       isComplete: completedModelIds.has(model.id),
+      requiredForContract: model.requiredForContract,
     }));
 
     if (status === 'complete') {
