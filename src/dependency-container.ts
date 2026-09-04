@@ -290,6 +290,7 @@ import {
   GetDocumentTemplateByIdUseCase,
   GetAllDocumentTemplatesUseCase,
   GetDocumentTemplateVersionsUseCase,
+  GetNextDocumentTemplateCodeUseCase,
 } from '@domains/document-template/use-cases/get-document-template.use-case';
 import {
   CreateNewDocumentTemplateVersionUseCase,
@@ -344,6 +345,7 @@ export class DependencyContainer {
   private getDocumentTemplateByIdUseCase!: GetDocumentTemplateByIdUseCase;
   private getAllDocumentTemplatesUseCase!: GetAllDocumentTemplatesUseCase;
   private getDocumentTemplateVersionsUseCase!: GetDocumentTemplateVersionsUseCase;
+  private getNextDocumentTemplateCodeUseCase!: GetNextDocumentTemplateCodeUseCase;
   private createNewDocumentTemplateVersionUseCase!: CreateNewDocumentTemplateVersionUseCase;
   private deleteDocumentTemplateUseCase!: DeleteDocumentTemplateUseCase;
 
@@ -1143,6 +1145,7 @@ export class DependencyContainer {
     this.getDocumentTemplateByIdUseCase = new GetDocumentTemplateByIdUseCase(this.documentTemplateRepository);
     this.getAllDocumentTemplatesUseCase = new GetAllDocumentTemplatesUseCase(this.documentTemplateRepository);
     this.getDocumentTemplateVersionsUseCase = new GetDocumentTemplateVersionsUseCase(this.documentTemplateRepository);
+    this.getNextDocumentTemplateCodeUseCase = new GetNextDocumentTemplateCodeUseCase(this.documentTemplateRepository);
     this.createNewDocumentTemplateVersionUseCase = new CreateNewDocumentTemplateVersionUseCase(this.documentTemplateRepository);
     this.deleteDocumentTemplateUseCase = new DeleteDocumentTemplateUseCase(this.documentTemplateRepository);
 
@@ -1151,6 +1154,7 @@ export class DependencyContainer {
       this.getDocumentTemplateByIdUseCase,
       this.getAllDocumentTemplatesUseCase,
       this.getDocumentTemplateVersionsUseCase,
+      this.getNextDocumentTemplateCodeUseCase,
       this.createNewDocumentTemplateVersionUseCase,
       this.deleteDocumentTemplateUseCase,
     );

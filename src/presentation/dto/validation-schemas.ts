@@ -421,6 +421,7 @@ export const createDocumentTemplateSchema = Joi.object({
   documentDate: Joi.string().isoDate().required(),
   description: Joi.string().max(2000).optional().allow(''),
   groupId: Joi.number().integer().positive().optional(),
+  code: Joi.string().trim().min(1).max(20).optional(),
   fields: Joi.array().items(documentTemplateFieldSchema).optional().default([]),
 });
 

@@ -3,7 +3,9 @@ import { IDocumentTemplateRepository } from '@domains/document-template/reposito
 import { DocumentTemplate, DocumentTemplateField } from '@domains/document-template/entities/document-template.entity';
 import { DocumentTemplateEntity } from '../database/entities/document-template.entity';
 import { AppDataSource } from '../database/typeorm.config';
-import { NotFoundError, ServerError } from '@shared/domain/errors';
+import { NotFoundError, ServerError, ValidationError } from '@shared/domain/errors';
+
+const LOCKABLE_DB_TYPES = new Set(['mysql', 'mariadb']);
 
 export class TypeOrmDocumentTemplateRepository implements IDocumentTemplateRepository {
   private repository: Repository<DocumentTemplateEntity>;
@@ -16,6 +18,29 @@ export class TypeOrmDocumentTemplateRepository implements IDocumentTemplateRepos
     const entity = this.toEntity(template);
     const saved = await this.repository.save(entity);
     return this.toDomain(saved);
+  }
+
+  async createWithCode(template: DocumentTemplate, requestedCode?: string): Promise<DocumentTemplate> {
+    return AppDataSource.transaction(async manager => {
+      // Serializa la creación de plantillas del mismo grupo para evitar que dos
+      // creaciones concurrentes calculen/reserven el mismo code (no hay constraint
+      // único en la DB para permitir reutilizar el code de plantillas eliminadas).
+      const dbType = AppDataSource.options.type;
+      if (LOCKABLE_DB_TYPES.has(dbType)) {
+        await manager.query('SELECT `id` FROM `groups` WHERE `id` = ? FOR UPDATE', [template.groupId]);
+      }
+
+      const repo = manager.getRepository(DocumentTemplateEntity);
+      const trimmedCode = requestedCode?.trim();
+      const code = trimmedCode
+        ? await this.assertCodeAvailable(repo, trimmedCode, template.groupId)
+        : await this.computeNextCode(repo, template.groupId);
+
+      const entity = this.toEntity(template);
+      entity.code = code;
+      const saved = await repo.save(entity);
+      return this.toDomain(saved);
+    });
   }
 
   async findById(id: string): Promise<DocumentTemplate | null> {
@@ -73,10 +98,30 @@ export class TypeOrmDocumentTemplateRepository implements IDocumentTemplateRepos
     await this.repository.softDelete(id);
   }
 
-  async getNextCode(): Promise<string> {
-    const result = await this.repository
+  /** Sugerencia de próximo code para el grupo. No reserva nada: el code final se resuelve
+   *  de forma atómica dentro de `createWithCode` al momento de guardar. */
+  async getNextCode(groupId: number): Promise<string> {
+    return this.computeNextCode(this.repository, groupId);
+  }
+
+  private async assertCodeAvailable(
+    repo: Repository<DocumentTemplateEntity>,
+    code: string,
+    groupId: number,
+  ): Promise<string> {
+    const conflict = await repo.findOne({ where: { code, groupId, deletedAt: IsNull() } });
+    if (conflict) {
+      throw new ValidationError(`El código "${code}" ya está en uso en este grupo`, 'code');
+    }
+    return code;
+  }
+
+  private async computeNextCode(repo: Repository<DocumentTemplateEntity>, groupId: number): Promise<string> {
+    const result = await repo
       .createQueryBuilder('dt')
       .select('MAX(dt.code)', 'maxCode')
+      .where('dt.groupId = :groupId', { groupId })
+      .andWhere('dt.deletedAt IS NULL')
       .getRawOne<{ maxCode: string | null }>();
 
     const maxCode = result?.maxCode;
