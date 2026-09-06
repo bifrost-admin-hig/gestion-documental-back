@@ -5,7 +5,7 @@ import { SignatureRepository } from '../repositories/signature.repository';
 import { SignatureVerificationCodeRepository } from '../repositories/signature-verification-code.repository';
 import { SignatureStatus } from '../value-objects/signature-enums';
 import { ProcessFlowParticipantActionUseCase } from '@domains/signature-flow/use-cases/progress-signature-flow.use-case';
-import { NotFoundError, ValidationError } from '@shared/domain/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '@shared/domain/errors';
 
 export interface CancelSignatureParams {
   signatureId: string;
@@ -27,6 +27,10 @@ export class CancelSignatureUseCase {
     const signature = await this.signatureRepository.findById(signatureId);
     if (!signature) {
       throw new NotFoundError('Proceso de firma no encontrado');
+    }
+
+    if (signature.userId !== userId) {
+      throw new ForbiddenError('No tienes permiso para cancelar este proceso de firma');
     }
 
     if (signature.status !== SignatureStatus.PENDING) {

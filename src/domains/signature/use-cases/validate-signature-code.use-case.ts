@@ -14,10 +14,11 @@ import { SignaturePdfStampService, StampTarget } from '@shared/infrastructure/pd
 import { TypeOrmFileRepository } from '@shared/infrastructure/repositories/typeorm-file.repository';
 import { ProcessFlowParticipantActionUseCase } from '@domains/signature-flow/use-cases/progress-signature-flow.use-case';
 import { decodeSignatureImage } from '@shared/utils/image';
-import { NotFoundError, ValidationError } from '@shared/domain/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '@shared/domain/errors';
 
 export interface ValidateSignatureCodeParams {
   signatureId: string;
+  userId: string;
   code: string;
   ipAddress: string;
   timezone?: string;
@@ -42,11 +43,15 @@ export class ValidateSignatureCodeUseCase {
   ) {}
 
   async execute(params: ValidateSignatureCodeParams): Promise<void> {
-    const { signatureId, code, ipAddress, timezone, signatureImage, saveSignatureForFuture } = params;
+    const { signatureId, userId, code, ipAddress, timezone, signatureImage, saveSignatureForFuture } = params;
 
     const signature = await this.signatureRepository.findById(signatureId);
     if (!signature) {
       throw new NotFoundError('Proceso de firma no encontrado');
+    }
+
+    if (signature.userId !== userId) {
+      throw new ForbiddenError('No tienes permiso para completar este proceso de firma');
     }
 
     if (signature.status !== SignatureStatus.PENDING) {

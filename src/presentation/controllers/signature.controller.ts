@@ -67,10 +67,12 @@ export class SignatureController {
 
   validate = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { signatureId, code, timezone, signatureImage, saveSignatureForFuture } = req.body;
+    const userId = req.auth!.user!.id;
     const ipAddress = extractClientIp(req);
 
     await this.validateSignatureCodeUseCase.execute({
       signatureId,
+      userId,
       code,
       ipAddress,
       timezone,
