@@ -11,6 +11,8 @@ export interface CreateDocumentTemplateRequest {
   groupId: number;
   fields?: DocumentTemplateField[];
   createdBy?: string;
+  /** Code elegido manualmente por el usuario. Si se omite, se autogenera. */
+  code?: string;
 }
 
 export class CreateDocumentTemplateUseCase {
@@ -25,11 +27,8 @@ export class CreateDocumentTemplateUseCase {
       throw new ValidationError('Grupo no encontrado', 'groupId');
     }
 
-    const code = await this.documentTemplateRepository.getNextCode();
-
     const props: DocumentTemplateProps = {
       title: request.title,
-      code,
       version: 1,
       documentDate: request.documentDate,
       description: request.description,
@@ -40,6 +39,6 @@ export class CreateDocumentTemplateUseCase {
     };
 
     const template = DocumentTemplate.create(props);
-    return this.documentTemplateRepository.save(template);
+    return this.documentTemplateRepository.createWithCode(template, request.code);
   }
 }

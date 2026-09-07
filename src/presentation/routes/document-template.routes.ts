@@ -34,6 +34,14 @@ export const createDocumentTemplateRoutes = (controller: DocumentTemplateControl
     controller.getDocumentTemplateVersions,
   );
 
+  // GET /api/document-templates/next-code - Get suggested next code for a group
+  router.get(
+    '/next-code',
+    authorize('document-template:create'),
+    getByGroup(),
+    controller.getNextDocumentTemplateCode,
+  );
+
   // GET /api/document-templates/:id - Get document template by ID
   router.get(
     '/:id',

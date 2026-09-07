@@ -4,6 +4,7 @@ import {
   GetDocumentTemplateByIdUseCase,
   GetAllDocumentTemplatesUseCase,
   GetDocumentTemplateVersionsUseCase,
+  GetNextDocumentTemplateCodeUseCase,
 } from '@domains/document-template/use-cases/get-document-template.use-case';
 import {
   CreateNewDocumentTemplateVersionUseCase,
@@ -11,6 +12,7 @@ import {
 } from '@domains/document-template/use-cases/update-document-template.use-case';
 import { asyncHandler } from '@shared/middleware/validation';
 import { parseNum } from '@shared/utils/numbers';
+import { ValidationError } from '@shared/domain/errors';
 
 export class DocumentTemplateController {
   constructor(
@@ -18,6 +20,7 @@ export class DocumentTemplateController {
     private readonly getDocumentTemplateByIdUseCase: GetDocumentTemplateByIdUseCase,
     private readonly getAllDocumentTemplatesUseCase: GetAllDocumentTemplatesUseCase,
     private readonly getDocumentTemplateVersionsUseCase: GetDocumentTemplateVersionsUseCase,
+    private readonly getNextDocumentTemplateCodeUseCase: GetNextDocumentTemplateCodeUseCase,
     private readonly createNewVersionUseCase: CreateNewDocumentTemplateVersionUseCase,
     private readonly deleteDocumentTemplateUseCase: DeleteDocumentTemplateUseCase,
   ) {}
@@ -52,6 +55,18 @@ export class DocumentTemplateController {
     res.status(200).json({
       success: true,
       data: template.toJSON(),
+    });
+  });
+
+  public getNextDocumentTemplateCode = asyncHandler(async (req: Request, res: Response) => {
+    const groupId = parseNum(req.query.groupId) || req.auth?.groupId;
+    if (!groupId) {
+      throw new ValidationError('El groupId es requerido', 'groupId');
+    }
+    const code = await this.getNextDocumentTemplateCodeUseCase.execute(groupId);
+    res.status(200).json({
+      success: true,
+      data: { code },
     });
   });
 

@@ -29,3 +29,11 @@ export class GetDocumentTemplateVersionsUseCase {
     return this.documentTemplateRepository.findByCode(code);
   }
 }
+
+export class GetNextDocumentTemplateCodeUseCase {
+  constructor(private readonly documentTemplateRepository: IDocumentTemplateRepository) {}
+
+  public async execute(groupId: number): Promise<string> {
+    return this.documentTemplateRepository.getNextCode(groupId);
+  }
+}
