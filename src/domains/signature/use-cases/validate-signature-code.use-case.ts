@@ -145,11 +145,32 @@ export class ValidateSignatureCodeUseCase {
       await this.documentRepository.save(document);
 
       if (!wasPartOfFlow) {
-        await this.tryStampPdf(document, signature.userId, tokenHash, ipAddress, signedAt, signatureImageFileId);
+        const stamped = await this.tryStampPdf(document, signature.userId, tokenHash, ipAddress, signedAt, signatureImageFileId);
+        if (!stamped) {
+          await this.recordSignedHistory(document, signature.userId);
+        }
       }
     }
   }
 
+  private async recordSignedHistory(document: Document, userId: string): Promise<void> {
+    await this.documentHistoryRepository.save({
+      documentId: document.id,
+      documentModelId: document.documentModelId,
+      name: document.name,
+      issuedDate: document.issuedDate ?? undefined,
+      expirationDate: document.expirationDate,
+      contractId: document.contractId,
+      description: document.description,
+      documentUrl: document.documentUrl,
+      status: document.status,
+      action: DocumentAction.SIGNATURE_SIGNED,
+      updatedBy: userId,
+      comment: 'Documento firmado electrónicamente.',
+    });
+  }
+
+  /** Devuelve true si el PDF se estampó y la nueva versión quedó registrada en el historial. */
   private async tryStampPdf(
     document: Document,
     userId: string,
@@ -157,15 +178,15 @@ export class ValidateSignatureCodeUseCase {
     ipAddress: string,
     signedAt: Date,
     signatureImageFileId: string | null,
-  ): Promise<void> {
-    if (!this.pdfStampService || !document.documentUrl) return;
+  ): Promise<boolean> {
+    if (!this.pdfStampService || !document.documentUrl) return false;
 
     const stampTarget = await this.resolvePdfPath(document.documentUrl);
-    if (!stampTarget) return;
+    if (!stampTarget) return false;
 
     try {
       const user = await this.userRepository.findById(userId);
-      if (!user) return;
+      if (!user) return false;
 
       const colaborator = await this.colaboratorRepository.findByUserId(userId);
       const signerDocumentNumber = colaborator?.numeroDocumento ?? 'N/A';
@@ -185,8 +206,10 @@ export class ValidateSignatureCodeUseCase {
       });
 
       await this.persistStampedDocument(document, stampedBytes, userId);
+      return true;
     } catch (err) {
       console.warn('[ValidateSignatureCodeUseCase] PDF stamping failed (non-critical):', err);
+      return false;
     }
   }
 
