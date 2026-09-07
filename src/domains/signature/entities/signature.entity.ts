@@ -17,6 +17,8 @@ export interface SignatureProps {
   status?: string;
   tokenHash?: string | null;
   ipAddress?: string | null;
+  signerTimezone?: string | null;
+  signatureImageFileId?: string | null;
   rejectionReason?: string | null;
   rejectionCode?: string | null;
   signedAt?: Date | null;
@@ -33,6 +35,8 @@ export class Signature {
   status: SignatureStatus;
   tokenHash: string | null;
   ipAddress: string | null;
+  signerTimezone: string | null;
+  signatureImageFileId: string | null;
   rejectionReason: string | null;
   rejectionCode: SignatureRejectionCode | null;
   signedAt: Date | null;
@@ -49,6 +53,8 @@ export class Signature {
       status: (status?: string) => parseEnum(status, SignatureStatus) ?? SignatureStatus.PENDING,
       tokenHash: (hash?: string | null) => hash ?? null,
       ipAddress: (ip?: string | null) => ip ?? null,
+      signerTimezone: (tz?: string | null) => tz ?? null,
+      signatureImageFileId: (v?: string | null) => v ?? null,
       rejectionReason: (reason?: string | null) => reason ?? null,
       rejectionCode: (code?: string | null) => parseEnum(code, SignatureRejectionCode) ?? null,
       signedAt: 'datetimeNullable',

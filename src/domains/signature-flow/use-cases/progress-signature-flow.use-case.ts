@@ -23,6 +23,7 @@ import {
   StampTarget,
 } from '@shared/infrastructure/pdf/signature-pdf-stamp.service';
 import { Document } from '@domains/document/entities/document.entity';
+import { DocumentVersioningService } from '@domains/document/services/document-versioning.service';
 import { SignatureFlow } from '../entities/signature-flow.entity';
 import { ExternalParticipantTokenRepository } from '../repositories/external-participant-token.repository';
 import { buildFrontendUrl } from '@shared/infrastructure/email/templates/primacta-notification-email.template';
@@ -48,6 +49,7 @@ export class ProcessFlowParticipantActionUseCase {
     private readonly fileRepository?: TypeOrmFileRepository,
     private readonly pdfStampService?: SignaturePdfStampService,
     private readonly externalTokenRepository?: ExternalParticipantTokenRepository,
+    private readonly documentVersioningService?: DocumentVersioningService,
   ) {}
 
   async execute(input: ProcessFlowParticipantActionInput): Promise<void> {
@@ -587,6 +589,7 @@ export class ProcessFlowParticipantActionUseCase {
             signerDocumentNumber: colaborator?.numeroDocumento ?? 'N/A',
             signerEmail: String(user.email),
             signedAt: signature.signedAt ?? s.actionAt ?? new Date(),
+            signatureImageBytes: await this.loadSignatureImageBytes(signature.signatureImageFileId),
             ipAddress: signature.ipAddress ?? 'N/A',
             tokenHash: signature.tokenHash,
           });
@@ -601,6 +604,7 @@ export class ProcessFlowParticipantActionUseCase {
             signerDocumentNumber: extToken?.documentNumber ?? 'N/A',
             signerEmail: s.externalEmail,
             signedAt: s.actionAt ?? new Date(),
+            signatureImageBytes: await this.loadSignatureImageBytes(extToken?.signatureImageFileId ?? null),
             ipAddress: extToken?.ipAddress ?? 'N/A',
             tokenHash: extToken?.signatureTokenHash ?? 'N/A',
           });
@@ -611,14 +615,70 @@ export class ProcessFlowParticipantActionUseCase {
 
       const verifyUrl = buildFrontendUrl(`/verificar?id=${document.id}`) ?? `/verificar?id=${document.id}`;
 
-      await this.pdfStampService.stampConsolidatedPdf(stampTarget, {
+      const stampedBytes = await this.pdfStampService.stampConsolidatedPdf(stampTarget, {
         documentId: document.id,
         completedAt: new Date(),
         verifyUrl,
         signers: signerData,
       });
+
+      await this.persistStampedDocument(document, stampedBytes);
     } catch (err) {
       console.warn('[ProcessFlowParticipantActionUseCase] Consolidated PDF stamping failed (non-critical):', err);
+    }
+  }
+
+  /**
+   * Guarda el PDF consolidado como un archivo nuevo (nunca sobrescribe el original) y
+   * archiva la versión previa del documento, para poder compararlas o recuperar el
+   * original ante cualquier error — mismo patrón que ya usa UpdateDocumentUseCase al
+   * reemplazar el archivo de un documento.
+   */
+  private async persistStampedDocument(document: Document, stampedBytes: Buffer): Promise<void> {
+    if (!this.fileRepository) return;
+
+    const previousDocumentUrl = document.documentUrl;
+    if (!previousDocumentUrl) return;
+
+    const originalFile = await this.fileRepository.findById(previousDocumentUrl).catch(() => null);
+    const fileName = originalFile?.originalName ?? `${document.name}.pdf`;
+
+    const newFile = await this.fileRepository.saveBuffer(stampedBytes, fileName, 'application/pdf');
+
+    const archived = this.documentVersioningService
+      ? await this.documentVersioningService.archiveCurrentFileVersion(
+        document,
+        'Versión reemplazada automáticamente al estampar la firma.',
+      )
+      : null;
+
+    document.updateDocumentUrl(newFile.id);
+    if (archived) {
+      document.previousVersionId = archived.id;
+    }
+    await this.documentRepository.update(document);
+
+    if (archived && this.documentVersioningService) {
+      await this.documentVersioningService.recordFileReplacedHistory({
+        liveDocument: document,
+        archivedDocument: archived,
+        previousDocumentUrl,
+        action: DocumentAction.VERSION_SUPERSEDED,
+        updatedByName: 'Sistema',
+        comment: 'Todos los firmantes completaron la firma.',
+      });
+    }
+  }
+
+  private async loadSignatureImageBytes(fileId: string | null): Promise<Buffer | undefined> {
+    if (!fileId || !this.fileRepository) return undefined;
+    try {
+      const file = await this.fileRepository.findById(fileId);
+      if (!file) return undefined;
+      return await this.fileRepository.getContent(file);
+    } catch (err) {
+      console.warn('[ProcessFlowParticipantActionUseCase] No se pudo cargar la imagen de la firma (no crítico):', err);
+      return undefined;
     }
   }
 

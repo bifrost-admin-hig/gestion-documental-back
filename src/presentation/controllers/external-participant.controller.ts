@@ -3,6 +3,7 @@ import { GetExternalParticipantAccessUseCase } from '@domains/signature-flow/use
 import { SubmitExternalParticipantActionUseCase } from '@domains/signature-flow/use-cases/external-participant-access.use-case';
 import { RequestExternalSignerOtpUseCase } from '@domains/signature-flow/use-cases/external-participant-access.use-case';
 import { ValidateExternalSignerOtpUseCase } from '@domains/signature-flow/use-cases/external-participant-access.use-case';
+import { GetExternalSignerSavedSignatureUseCase } from '@domains/signature-flow/use-cases/external-participant-access.use-case';
 import { TypeOrmFileRepository } from '@shared/infrastructure/repositories/typeorm-file.repository';
 import { ServerError, ValidationError } from '@shared/domain/errors';
 import { Bucket } from '@shared/utils/Bucket';
@@ -18,12 +19,14 @@ export class ExternalParticipantController {
     private readonly requestOtpUseCase: RequestExternalSignerOtpUseCase,
     private readonly validateOtpUseCase: ValidateExternalSignerOtpUseCase,
     private readonly fileRepository: TypeOrmFileRepository,
+    private readonly getSavedSignatureUseCase?: GetExternalSignerSavedSignatureUseCase,
   ) {
     this.getAccess = this.getAccess.bind(this);
     this.getDocument = this.getDocument.bind(this);
     this.submitAction = this.submitAction.bind(this);
     this.requestOtp = this.requestOtp.bind(this);
     this.validateOtp = this.validateOtp.bind(this);
+    this.getSavedSignature = this.getSavedSignature.bind(this);
   }
 
   async getAccess(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -88,15 +91,43 @@ export class ExternalParticipantController {
   async validateOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { token } = req.params;
-      const { code, documentNumber } = req.body as { code: string; documentNumber?: string };
+      const { code, documentNumber, timezone, signatureImage, saveSignatureForFuture } = req.body as {
+        code: string;
+        documentNumber?: string;
+        timezone?: string;
+        signatureImage?: string;
+        saveSignatureForFuture?: boolean;
+      };
       const ipAddress = extractClientIp(req);
 
       if (!code || typeof code !== 'string' || code.length !== 6) {
         throw new ValidationError('El código debe ser de 6 dígitos.');
       }
 
-      await this.validateOtpUseCase.execute(token, code, ipAddress, documentNumber?.trim());
+      await this.validateOtpUseCase.execute(
+        token,
+        code,
+        ipAddress,
+        documentNumber?.trim(),
+        timezone?.trim(),
+        signatureImage,
+        saveSignatureForFuture,
+      );
       res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getSavedSignature(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token } = req.params;
+      if (!this.getSavedSignatureUseCase) {
+        res.json({ available: false });
+        return;
+      }
+      const result = await this.getSavedSignatureUseCase.execute(token);
+      res.json(result);
     } catch (err) {
       next(err);
     }

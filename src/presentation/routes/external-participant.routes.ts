@@ -9,6 +9,7 @@ export const createExternalParticipantRoutes = (controller: ExternalParticipantC
   router.get('/:token/document', controller.getDocument);
   router.post('/:token/action', controller.submitAction);
   router.post('/:token/request-otp', controller.requestOtp);
+  router.get('/:token/saved-signature', controller.getSavedSignature);
   router.post('/:token/sign', controller.validateOtp);
 
   return router;

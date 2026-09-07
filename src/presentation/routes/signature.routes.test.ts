@@ -6,6 +6,9 @@ import { App } from '@/app';
 import { AppDataSource, clearDatabase } from '@shared/infrastructure/database/typeorm.config';
 import { DependencyContainer } from '@/dependency-container';
 
+// PNG 1x1 transparente válido, usado como imagen de firma de prueba.
+const SAMPLE_SIGNATURE_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
 describe('SignatureController', () => {
   let appInstance: App;
   let app: Application;
@@ -122,7 +125,11 @@ describe('SignatureController', () => {
       const res = await supertest(app)
         .post('/api/signatures/validate')
         .set('Authorization', `Bearer user-id:${userId}`)
-        .send({ signatureId: '00000000-0000-0000-0000-000000000001', code: '123456' });
+        .send({
+          signatureId: '00000000-0000-0000-0000-000000000001',
+          code: '123456',
+          signatureImage: SAMPLE_SIGNATURE_IMAGE,
+        });
 
       expect(res.status).toBe(404);
     });

@@ -229,7 +229,7 @@ export class SignatureFlowNotificationService {
     const isValidator = role === 'validator';
     const title = isValidator ? 'Documento pendiente de revisión' : 'Documento pendiente de firma';
     const action = isValidator ? 'revisar y aprobar' : 'firmar';
-    const actionLabel = isValidator ? 'Ir a revisar' : 'Ir a firmar';
+    const actionLabel = isValidator ? 'Revisar' : 'Firmar';
     const message = `Has sido invitado a ${action} el documento: ${documentName}. El enlace es válido por tiempo limitado.`;
 
     const html = buildPrimactaNotificationEmail({
@@ -631,7 +631,7 @@ export class SignatureFlowNotificationService {
     const isValidator = participant.role === SignatureFlowParticipantRole.VALIDATOR;
     const title = isValidator ? 'Recordatorio: documento pendiente de revisión' : 'Recordatorio: documento pendiente de firma';
     const action = isValidator ? 'revisar y aprobar' : 'firmar';
-    const actionLabel = isValidator ? 'Ir a revisar' : 'Ir a firmar';
+    const actionLabel = isValidator ? 'Revisar' : 'Firmar';
     const message = `Todavía no has completado la acción de ${action} el documento: ${documentName}. Este es un recordatorio automático.`;
     const html = buildPrimactaNotificationEmail({
       title,

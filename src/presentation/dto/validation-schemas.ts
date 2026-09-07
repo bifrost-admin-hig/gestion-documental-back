@@ -442,6 +442,9 @@ export const initiateSignatureSchema = Joi.object({
 export const validateSignatureCodeSchema = Joi.object({
   signatureId: Joi.string().uuid().required(),
   code: Joi.string().length(6).pattern(/^\d{6}$/).required(),
+  timezone: Joi.string().max(64).optional(),
+  signatureImage: Joi.string().max(500000).required(),
+  saveSignatureForFuture: Joi.boolean().optional(),
 });
 
 export const cancelSignatureSchema = Joi.object({

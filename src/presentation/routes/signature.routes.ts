@@ -19,6 +19,7 @@ export const createSignatureRoutes = (controller: SignatureController): Router =
   router.use(auth);
 
   router.get('/sms-default-phone', authorize('signature:create'), controller.getDefaultSmsPhone);
+  router.get('/my-signature', authorize('signature:create'), controller.getMySignature);
   router.post('/initiate', authorize('signature:create'), validateRequest(initiateSignatureSchema, true), controller.initiate);
   router.post('/validate', authorize('signature:create'), validateRequest(validateSignatureCodeSchema, true), controller.validate);
   router.post('/cancel', authorize('signature:create'), validateRequest(cancelSignatureSchema, true), controller.cancel);

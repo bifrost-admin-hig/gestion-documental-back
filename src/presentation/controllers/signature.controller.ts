@@ -9,10 +9,13 @@ import { GetSignatureByDocumentUseCase, GetSignatureByTokenHashUseCase } from '@
 import { VerifyDocumentSignatureUseCase } from '@domains/signature/use-cases/verify-document-signature.use-case';
 import { GetSignatureSmsPhoneUseCase } from '@domains/signature/use-cases/get-signature-sms-phone.use-case';
 import { GetPublicDocumentVerificationUseCase } from '@domains/signature-flow/use-cases/get-public-document-verification.use-case';
+import { GetSavedSignaturePreviewUseCase } from '@domains/signature/use-cases/get-saved-signature-preview.use-case';
 import { TypeOrmFileRepository } from '@shared/infrastructure/repositories/typeorm-file.repository';
 import { Signature } from '@domains/signature/entities/signature.entity';
 import { extractClientIp } from '@shared/utils/ip';
 import { NotFoundError, ServerError } from '@shared/domain/errors';
+import { Bucket } from '@shared/utils/Bucket';
+import FileUtils from '@shared/utils/FileUtils';
 
 interface SignatureResponseDto {
   id: string;
@@ -41,6 +44,7 @@ export class SignatureController {
     private readonly getSignatureSmsPhoneUseCase: GetSignatureSmsPhoneUseCase,
     private readonly fileRepository?: TypeOrmFileRepository,
     private readonly getPublicDocumentVerificationUseCase?: GetPublicDocumentVerificationUseCase,
+    private readonly getSavedSignaturePreviewUseCase?: GetSavedSignaturePreviewUseCase,
   ) {}
 
   initiate = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -62,19 +66,36 @@ export class SignatureController {
   });
 
   validate = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { signatureId, code } = req.body;
+    const { signatureId, code, timezone, signatureImage, saveSignatureForFuture } = req.body;
+    const userId = req.auth!.user!.id;
     const ipAddress = extractClientIp(req);
 
     await this.validateSignatureCodeUseCase.execute({
       signatureId,
+      userId,
       code,
       ipAddress,
+      timezone,
+      signatureImage,
+      saveSignatureForFuture,
     });
 
     res.status(200).json({
       success: true,
       message: 'Documento firmado exitosamente',
     });
+  });
+
+  getMySignature = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const userId = req.auth!.user!.id;
+
+    if (!this.getSavedSignaturePreviewUseCase) {
+      res.status(200).json({ success: true, data: { available: false } });
+      return;
+    }
+
+    const result = await this.getSavedSignaturePreviewUseCase.execute({ userId });
+    res.status(200).json({ success: true, data: result });
   });
 
   cancel = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -145,26 +166,7 @@ export class SignatureController {
       throw new NotFoundError('El documento no tiene archivo asociado');
     }
 
-    const filePath = await this.resolveFilePath(documentUrl);
-    if (!filePath) {
-      throw new NotFoundError('Archivo del documento no disponible');
-    }
-
-    if (!fs.existsSync(filePath)) {
-      throw new NotFoundError('Archivo del documento no encontrado en el servidor');
-    }
-
-    try {
-      const ext = path.extname(filePath).toLowerCase();
-      const mimeType = ext === '.pdf' ? 'application/pdf' : 'application/octet-stream';
-      const fileName = path.basename(filePath);
-      res.setHeader('Content-Type', mimeType);
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
-      const stream = fs.createReadStream(filePath);
-      stream.pipe(res);
-    } catch {
-      throw new ServerError('Error al servir el archivo del documento');
-    }
+    await this.serveDocumentFile(documentUrl, res);
   });
 
   verifyDocumentById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -186,34 +188,72 @@ export class SignatureController {
     if (!documentUrl) {
       throw new NotFoundError('El documento no tiene archivo asociado');
     }
-    const filePath = await this.resolveFilePath(documentUrl);
-    if (!filePath) {
-      throw new NotFoundError('Archivo del documento no disponible');
-    }
-    if (!fs.existsSync(filePath)) {
-      throw new NotFoundError('Archivo del documento no encontrado en el servidor');
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const mimeType = ext === '.pdf' ? 'application/pdf' : 'application/octet-stream';
-    const fileName = path.basename(filePath);
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
-    fs.createReadStream(filePath).pipe(res);
+    await this.serveDocumentFile(documentUrl, res);
   });
 
-  private async resolveFilePath(documentUrl: string): Promise<string | null> {
-    if (documentUrl.toLowerCase().endsWith('.pdf') && path.isAbsolute(documentUrl)) {
-      return documentUrl;
+  /**
+   * Sirve el archivo de un documento firmado tanto desde almacenamiento local
+   * como desde S3 (mismo patrón que ExternalParticipantController.serveDocumentFile).
+   */
+  private async serveDocumentFile(documentUrl: string, res: Response): Promise<void> {
+    if (this.fileRepository) {
+      const file = await this.fileRepository.findById(documentUrl);
+
+      if (file) {
+        if (file.storage === 's3') {
+          const buffer = await this.downloadFromS3(file.path);
+          res.setHeader('Content-Type', file.mimeType || 'application/pdf');
+          res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
+          res.send(buffer);
+          return;
+        }
+
+        if (!fs.existsSync(file.path)) {
+          throw new NotFoundError('Archivo del documento no encontrado en el servidor');
+        }
+        res.setHeader('Content-Type', file.mimeType || 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
+        fs.createReadStream(file.path).pipe(res);
+        return;
+      }
     }
 
-    if (!this.fileRepository) return null;
+    // Fallback: documentUrl might be an absolute local path (legacy documents)
+    if (documentUrl.toLowerCase().endsWith('.pdf') && path.isAbsolute(documentUrl)) {
+      if (!fs.existsSync(documentUrl)) {
+        throw new NotFoundError('Archivo del documento no encontrado en el servidor');
+      }
+      const fileName = path.basename(documentUrl);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+      fs.createReadStream(documentUrl).pipe(res);
+      return;
+    }
 
-    const file = await this.fileRepository.findById(documentUrl);
-    if (!file) return null;
+    throw new NotFoundError('Archivo del documento no disponible');
+  }
 
-    if (file.storage !== 'local') return null;
+  private async downloadFromS3(filePath: string): Promise<Buffer> {
+    const bucketName = process.env.AWS_S3_BUCKET;
+    const region = process.env.AWS_DEFAULT_REGION;
+    const accessKeyId = process.env.AWS_S3_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.AWS_S3_SECRET_ACCESS_KEY;
 
-    return file.path;
+    if (!bucketName || !region || !accessKeyId || !secretAccessKey) {
+      throw new ServerError('S3 configuration incomplete');
+    }
+
+    const bucket = new Bucket({ bucket: bucketName, region, credentials: { accessKeyId, secretAccessKey } });
+
+    const tempDir = FileUtils.buildPath('temp');
+    await fs.promises.mkdir(tempDir, { recursive: true });
+    const tempPath = path.join(tempDir, `verify-doc-${Date.now()}`);
+
+    const buffer = await bucket.downloadFile({ source: filePath });
+    await fs.promises.writeFile(tempPath, buffer);
+    const data = await fs.promises.readFile(tempPath);
+    await FileUtils.delete(tempPath).catch(() => {});
+    return data;
   }
 
   private toResponseDto(signature: Signature): SignatureResponseDto {

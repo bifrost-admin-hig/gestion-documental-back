@@ -4,10 +4,7 @@ import fs from 'fs';
 import { Bucket } from '@shared/utils/Bucket';
 import FileUtils from '@shared/utils/FileUtils';
 import { TypeOrmFileRepository } from '@shared/infrastructure/repositories/typeorm-file.repository';
-import { File } from '@domains/file/entities/file.entity';
 import { NotFoundError, ServerError, ValidationError } from '@shared/domain/errors';
-
-const STORAGE = (process.env.FILE_STORAGE || 'local').toLowerCase();
 
 export class FileController {
   constructor(private readonly fileRepo: TypeOrmFileRepository) {
@@ -30,53 +27,7 @@ export class FileController {
       throw new ValidationError('file required', { fields: ['filename', 'contentBase64'] });
     }
 
-    // Save file locally using FileUtils utility
-    const result = await FileUtils.save(contentBase64, filename);
-    const { path: localPath, filename: uniqueName, size: fileSize } = result;
-
-    let filePath = localPath;
-    let storage: 'local' | 's3' = 'local';
-
-    // Upload to S3 if configured
-    if (STORAGE === 's3') {
-      const bucketName = process.env.AWS_S3_BUCKET;
-      const region = process.env.AWS_DEFAULT_REGION;
-      const accessKeyId = process.env.AWS_S3_ACCESS_KEY_ID;
-      const secretAccessKey = process.env.AWS_S3_SECRET_ACCESS_KEY;
-
-      if (!bucketName || !region || !accessKeyId || !secretAccessKey) {
-        throw new ServerError('S3 configuration incomplete');
-      }
-
-      const bucket = new Bucket({
-        bucket: bucketName,
-        region,
-        credentials: { accessKeyId, secretAccessKey },
-      });
-
-      try {
-        const s3Key = `${FileUtils.getDateFolder()}/${uniqueName}`;
-        await bucket.uploadFile({ source: localPath, target: s3Key });
-        storage = 's3';
-        filePath = s3Key;
-
-        // Delete local file after successful S3 upload
-        await FileUtils.delete(localPath);
-      } catch (error) {
-        console.error('Error uploading to S3:', error);
-        throw error;
-      }
-    }
-
-    const file = new File({
-      originalName: path.basename(filename),
-      path: filePath,
-      storage,
-      mimeType,
-      size: size || fileSize,
-    });
-
-    const savedFile = await this.fileRepo.save(file);
+    const savedFile = await this.fileRepo.saveBuffer(Buffer.from(contentBase64, 'base64'), filename, mimeType, size);
 
     res.status(201).json({ success: true, data: savedFile });
   }

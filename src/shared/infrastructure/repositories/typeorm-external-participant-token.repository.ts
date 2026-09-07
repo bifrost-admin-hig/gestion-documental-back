@@ -52,6 +52,8 @@ export class TypeOrmExternalParticipantTokenRepository implements ExternalPartic
       signatureTokenHash: entity.signatureTokenHash ?? null,
       ipAddress: entity.ipAddress ?? null,
       documentNumber: entity.documentNumber ?? null,
+      timezone: entity.timezone ?? null,
+      signatureImageFileId: entity.signatureImageFileId ?? null,
       createdAt: entity.createdAt,
     };
     return ExternalParticipantToken.create(props);
@@ -71,6 +73,8 @@ export class TypeOrmExternalParticipantTokenRepository implements ExternalPartic
       signatureTokenHash: token.signatureTokenHash ?? undefined,
       ipAddress: token.ipAddress ?? undefined,
       documentNumber: token.documentNumber ?? undefined,
+      timezone: token.timezone ?? undefined,
+      signatureImageFileId: token.signatureImageFileId ?? undefined,
     };
   }
 }
