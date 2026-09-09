@@ -51,6 +51,7 @@ export class SignatureFlowController {
       documentId, orderType, signerOrderType, participants,
       reminderEnabled, reminderIntervalMinutes,
       autoCloseEnabled, autoCloseIntervalMinutes,
+      requireSignatureDrawing,
     } = req.body;
 
     const flow = await this.createSignatureFlowUseCase.execute({
@@ -63,6 +64,7 @@ export class SignatureFlowController {
       reminderIntervalMinutes,
       autoCloseEnabled,
       autoCloseIntervalMinutes,
+      requireSignatureDrawing,
     });
 
     res.status(201).json({ success: true, data: this.flowToDto(flow) });
@@ -107,6 +109,7 @@ export class SignatureFlowController {
         },
         sentAt: task.sentAt?.toISOString() ?? null,
         sentByName: task.sentByName,
+        requiresSignatureDrawing: task.requiresSignatureDrawing,
       })),
       count: tasks.length,
     });
@@ -344,6 +347,7 @@ export class SignatureFlowController {
       reminderIntervalMinutes: flow.reminderIntervalMinutes,
       autoCloseEnabled: flow.autoCloseEnabled,
       autoCloseIntervalMinutes: flow.autoCloseIntervalMinutes,
+      requireSignatureDrawing: flow.requireSignatureDrawing,
       createdAt: flow.createdAt.toISOString(),
       updatedAt: flow.updatedAt.toISOString(),
     };

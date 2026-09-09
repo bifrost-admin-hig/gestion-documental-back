@@ -13,6 +13,7 @@ export interface PendingSignatureTaskItem {
   contractNumber: string | null;
   sentAt: Date | null;
   sentByName: string | null;
+  requiresSignatureDrawing: boolean;
 }
 
 export interface SignatureFlowParticipantRepository {

@@ -43,6 +43,8 @@ export interface CreateSignatureFlowInput {
   reminderIntervalMinutes?: number;
   autoCloseEnabled?: boolean;
   autoCloseIntervalMinutes?: number;
+  /** Si es false, ningún firmante/validador de este flujo dibuja firma: solo validan con OTP. */
+  requireSignatureDrawing?: boolean;
   participants: Array<{
     userId?: string;
     colaboratorId?: string;
@@ -126,6 +128,7 @@ export class CreateSignatureFlowUseCase {
       reminderIntervalMinutes: input.reminderIntervalMinutes,
       autoCloseEnabled: input.autoCloseEnabled,
       autoCloseIntervalMinutes: expirationLimits.autoCloseIntervalMinutes ?? input.autoCloseIntervalMinutes,
+      requireSignatureDrawing: input.requireSignatureDrawing,
     };
 
     const flow = await this.signatureFlowRepository.save(SignatureFlow.create(flowProps));

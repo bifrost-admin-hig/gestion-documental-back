@@ -30,6 +30,8 @@ export interface SignatureFlowProps {
   reminderIntervalMinutes?: number;
   autoCloseEnabled?: boolean;
   autoCloseIntervalMinutes?: number;
+  /** Si es false, los firmantes solo validan con OTP: no dibujan firma ni se estampa el recuadro en el PDF. */
+  requireSignatureDrawing?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -46,6 +48,7 @@ export class SignatureFlow {
   reminderIntervalMinutes: number;
   autoCloseEnabled: boolean;
   autoCloseIntervalMinutes: number;
+  requireSignatureDrawing: boolean;
   createdAt: Date;
   updatedAt: Date;
 
@@ -63,6 +66,7 @@ export class SignatureFlow {
       reminderIntervalMinutes: (v?: number) => v ?? DEFAULT_REMINDER_INTERVAL_MINUTES,
       autoCloseEnabled: (v?: boolean) => v ?? false,
       autoCloseIntervalMinutes: (v?: number) => v ?? DEFAULT_AUTO_CLOSE_INTERVAL_MINUTES,
+      requireSignatureDrawing: (v?: boolean) => v ?? true,
       createdAt: 'datetime',
       updatedAt: 'datetime',
     });

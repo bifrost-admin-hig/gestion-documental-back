@@ -552,7 +552,7 @@ export class ProcessFlowParticipantActionUseCase {
   }
 
   private async tryStampConsolidatedPdf(
-    _flow: SignatureFlow,
+    flow: SignatureFlow,
     document: Document,
     participants: SignatureFlowParticipant[],
   ): Promise<void> {
@@ -561,6 +561,8 @@ export class ProcessFlowParticipantActionUseCase {
     try {
       const stampTarget = await this.resolvePdfPath(document.documentUrl);
       if (!stampTarget) return;
+
+      const requiresDrawing = flow.requireSignatureDrawing;
 
       const signedSigners = participants.filter(
         (p) => p.role === SignatureFlowParticipantRole.SIGNER
@@ -587,7 +589,9 @@ export class ProcessFlowParticipantActionUseCase {
             : null;
 
           const signerName = `${user.firstName} ${user.lastName}`;
-          const { bytes, reason } = await this.loadSignatureImageBytes(signature.signatureImageFileId);
+          const { bytes, reason } = requiresDrawing
+            ? await this.loadSignatureImageBytes(signature.signatureImageFileId)
+            : {};
           if (reason) missingSignatureReasons.push(`${signerName}: ${reason}`);
           if (signature.signatureImageFileId) {
             signatureImageFiles.push({ signerName, fileId: signature.signatureImageFileId });
@@ -599,6 +603,7 @@ export class ProcessFlowParticipantActionUseCase {
             signerEmail: String(user.email),
             signedAt: signature.signedAt ?? s.actionAt ?? new Date(),
             signatureImageBytes: bytes,
+            signatureRequired: requiresDrawing,
             ipAddress: signature.ipAddress ?? 'N/A',
             tokenHash: signature.tokenHash,
           });
@@ -609,7 +614,9 @@ export class ProcessFlowParticipantActionUseCase {
             : null;
 
           const signerName = s.externalName ?? 'Firmante externo';
-          const { bytes, reason } = await this.loadSignatureImageBytes(extToken?.signatureImageFileId ?? null);
+          const { bytes, reason } = requiresDrawing
+            ? await this.loadSignatureImageBytes(extToken?.signatureImageFileId ?? null)
+            : {};
           if (reason) missingSignatureReasons.push(`${signerName}: ${reason}`);
           if (extToken?.signatureImageFileId) {
             signatureImageFiles.push({ signerName, fileId: extToken.signatureImageFileId });
@@ -621,6 +628,7 @@ export class ProcessFlowParticipantActionUseCase {
             signerEmail: s.externalEmail,
             signedAt: s.actionAt ?? new Date(),
             signatureImageBytes: bytes,
+            signatureRequired: requiresDrawing,
             ipAddress: extToken?.ipAddress ?? 'N/A',
             tokenHash: extToken?.signatureTokenHash ?? 'N/A',
           });

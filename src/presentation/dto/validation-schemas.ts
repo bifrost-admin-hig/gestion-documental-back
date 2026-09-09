@@ -444,7 +444,10 @@ export const validateSignatureCodeSchema = Joi.object({
   signatureId: Joi.string().uuid().required(),
   code: Joi.string().length(6).pattern(/^\d{6}$/).required(),
   timezone: Joi.string().max(64).optional(),
-  signatureImage: Joi.string().max(500000).required(),
+  // Opcional (y se permite vacío): el flujo puede tener requireSignatureDrawing=false,
+  // en cuyo caso el firmante solo valida con OTP y no dibuja firma. El caso de uso
+  // decide si igual es obligatorio según el flujo activo del documento.
+  signatureImage: Joi.string().max(500000).allow('').optional(),
   saveSignatureForFuture: Joi.boolean().optional(),
 });
 
@@ -471,6 +474,7 @@ export const createSignatureFlowSchema = Joi.object({
   reminderIntervalMinutes: Joi.number().integer().min(1440).optional(),
   autoCloseEnabled: Joi.boolean().optional(),
   autoCloseIntervalMinutes: Joi.number().integer().min(1440).optional(),
+  requireSignatureDrawing: Joi.boolean().optional(),
 });
 
 export const updateSignatureFlowSchema = Joi.object({

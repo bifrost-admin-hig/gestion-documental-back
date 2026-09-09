@@ -345,6 +345,7 @@ export class TypeOrmSignatureFlowRepository implements SignatureFlowRepository {
       reminderIntervalMinutes: entity.reminderIntervalMinutes,
       autoCloseEnabled: entity.autoCloseEnabled,
       autoCloseIntervalMinutes: entity.autoCloseIntervalMinutes,
+      requireSignatureDrawing: entity.requireSignatureDrawing,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
     };
@@ -364,6 +365,7 @@ export class TypeOrmSignatureFlowRepository implements SignatureFlowRepository {
       reminderIntervalMinutes: flow.reminderIntervalMinutes,
       autoCloseEnabled: flow.autoCloseEnabled,
       autoCloseIntervalMinutes: flow.autoCloseIntervalMinutes,
+      requireSignatureDrawing: flow.requireSignatureDrawing,
     };
   }
 }

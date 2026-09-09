@@ -13,6 +13,7 @@ import { SignatureCryptoService } from '@shared/security/signature-crypto.servic
 import { SignaturePdfStampService, StampTarget } from '@shared/infrastructure/pdf/signature-pdf-stamp.service';
 import { TypeOrmFileRepository } from '@shared/infrastructure/repositories/typeorm-file.repository';
 import { ProcessFlowParticipantActionUseCase } from '@domains/signature-flow/use-cases/progress-signature-flow.use-case';
+import { SignatureFlowRepository } from '@domains/signature-flow/repositories/signature-flow.repository';
 import { decodeSignatureImage } from '@shared/utils/image';
 import { ForbiddenError, NotFoundError, ValidationError } from '@shared/domain/errors';
 
@@ -22,7 +23,8 @@ export interface ValidateSignatureCodeParams {
   code: string;
   ipAddress: string;
   timezone?: string;
-  signatureImage: string;
+  /** Opcional cuando el flujo activo del documento tiene requireSignatureDrawing=false. */
+  signatureImage?: string;
   saveSignatureForFuture?: boolean;
 }
 
@@ -40,6 +42,7 @@ export class ValidateSignatureCodeUseCase {
     private readonly fileRepository?: TypeOrmFileRepository,
     private readonly userSignatureRepository?: UserSignatureRepository,
     private readonly documentVersioningService?: DocumentVersioningService,
+    private readonly signatureFlowRepository?: SignatureFlowRepository,
   ) {}
 
   async execute(params: ValidateSignatureCodeParams): Promise<void> {
@@ -103,7 +106,17 @@ export class ValidateSignatureCodeUseCase {
       throw new ValidationError(`Código incorrecto. Te quedan ${remaining} intento(s).`);
     }
 
-    const signatureImageBuffer = decodeSignatureImage(signatureImage);
+    const activeFlow = this.signatureFlowRepository
+      ? await this.signatureFlowRepository.findActiveByDocumentId(signature.documentId)
+      : null;
+    const requiresDrawing = activeFlow?.requireSignatureDrawing ?? true;
+
+    if (requiresDrawing && !signatureImage) {
+      throw new ValidationError('Debes dibujar tu firma para completar el proceso.');
+    }
+    const signatureImageBuffer = requiresDrawing && signatureImage
+      ? decodeSignatureImage(signatureImage)
+      : null;
 
     const signedAt = new Date();
     const tokenHash = this.cryptoService.generateTokenHash({
@@ -117,7 +130,7 @@ export class ValidateSignatureCodeUseCase {
     await this.signatureCodeRepository.update(verificationCode);
 
     let signatureImageFileId: string | null = null;
-    if (this.fileRepository) {
+    if (this.fileRepository && signatureImageBuffer) {
       const savedImage = await this.fileRepository.saveBuffer(signatureImageBuffer, 'signature.png', 'image/png');
       signatureImageFileId = savedImage.id;
 
@@ -145,7 +158,7 @@ export class ValidateSignatureCodeUseCase {
       await this.documentRepository.save(document);
 
       if (!wasPartOfFlow) {
-        const stamped = await this.tryStampPdf(document, signature.userId, tokenHash, ipAddress, signedAt, signatureImageFileId);
+        const stamped = await this.tryStampPdf(document, signature.userId, tokenHash, ipAddress, signedAt, signatureImageFileId, requiresDrawing);
         if (!stamped) {
           await this.recordSignedHistory(document, signature.userId);
         }
@@ -178,6 +191,7 @@ export class ValidateSignatureCodeUseCase {
     ipAddress: string,
     signedAt: Date,
     signatureImageFileId: string | null,
+    requiresDrawing: boolean = true,
   ): Promise<boolean> {
     if (!this.pdfStampService || !document.documentUrl) return false;
 
@@ -193,7 +207,9 @@ export class ValidateSignatureCodeUseCase {
 
       const verifyUrl = this.buildVerifyUrl(document.id, tokenHash);
 
-      const { bytes: signatureImageBytes, reason: missingSignatureReason } = await this.loadSignatureImageBytes(signatureImageFileId);
+      const { bytes: signatureImageBytes, reason: missingSignatureReason } = requiresDrawing
+        ? await this.loadSignatureImageBytes(signatureImageFileId)
+        : {};
 
       const { bytes: stampedBytes, signatureWarning } = await this.pdfStampService.stampPdf(stampTarget, {
         signerName: `${user.firstName} ${user.lastName}`,
@@ -201,6 +217,7 @@ export class ValidateSignatureCodeUseCase {
         signerEmail: String(user.email),
         signedAt,
         signatureImageBytes,
+        signatureRequired: requiresDrawing,
         ipAddress,
         documentId: document.id,
         tokenHash,
