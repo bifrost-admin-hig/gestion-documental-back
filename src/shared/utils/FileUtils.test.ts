@@ -60,12 +60,12 @@ describe('FileUtils Utility Class', () => {
   });
 
   describe('generateUniqueFilename', () => {
-    it('should generate a unique filename with timestamp', () => {
+    it('should generate a unique filename with timestamp and random suffix', () => {
       const original = 'document.pdf';
       const result = FileUtils.generateUniqueFilename(original);
 
       expect(result).toContain('document.pdf');
-      expect(result).toMatch(/^\d+-document\.pdf$/);
+      expect(result).toMatch(/^\d+-[0-9a-f]{16}-document\.pdf$/);
     });
 
     it('should handle filenames with paths', () => {
@@ -76,14 +76,13 @@ describe('FileUtils Utility Class', () => {
       expect(result).not.toContain('path/to/');
     });
 
-    it('should generate different filenames for consecutive calls', async () => {
-      const original = 'test.txt';
+    it('should generate different filenames for consecutive calls, even within the same millisecond', () => {
+      // Mismo nombre original repetido (ej. "signature.png" para toda firma dibujada) —
+      // sin el sufijo aleatorio, dos llamadas en el mismo milisegundo colisionarían.
+      const original = 'signature.png';
       const first = FileUtils.generateUniqueFilename(original);
-
-      // Wait a tiny bit to ensure different timestamp
-      await new Promise(resolve => setTimeout(resolve, 2));
-
       const second = FileUtils.generateUniqueFilename(original);
+
       expect(first).not.toBe(second);
     });
   });

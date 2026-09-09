@@ -42,6 +42,23 @@ export interface ConsolidatedStampData {
   signers: SignerStampData[];
 }
 
+export interface StampResult {
+  bytes: Buffer;
+  /**
+   * Motivo por el que el dibujo de la firma no se pudo incluir en el PDF, si corresponde.
+   * El estampado igual se completa sin ella (recuadro vacío) — esto es solo para que
+   * quien llama pueda dejar constancia visible del problema (ej. en el Historial del
+   * documento), ya que de otro modo no queda ningún rastro accesible desde la app.
+   */
+  signatureWarning?: string;
+}
+
+export interface ConsolidatedStampResult {
+  bytes: Buffer;
+  /** Un motivo por firmante cuyo dibujo de firma no se pudo incluir en el PDF. */
+  signerWarnings: Array<{ signerName: string; reason: string }>;
+}
+
 /**
  * Zona horaria usada para mostrar la fecha/hora en el estampado de firma.
  * La plataforma por ahora opera con una única zona horaria global (Chile continental);
@@ -52,7 +69,7 @@ const DEFAULT_STAMP_TIMEZONE = 'America/Santiago';
 
 export class SignaturePdfStampService {
   /** Devuelve los bytes del PDF ya estampado — no escribe nada, eso lo decide quien llama. */
-  async stampPdf(target: StampTarget, data: SignatureStampData): Promise<Buffer> {
+  async stampPdf(target: StampTarget, data: SignatureStampData): Promise<StampResult> {
     const pdfBytes = await this.readBytes(target);
     const pdfDoc = await PDFDocument.load(pdfBytes);
 
@@ -152,23 +169,29 @@ export class SignaturePdfStampService {
     });
 
     // Firma dibujada por el firmante, arriba del QR en la misma columna derecha.
-    await this.drawSignatureImage(pdfDoc, stampPage, data.signatureImageBytes, {
+    const signatureWarning = await this.drawSignatureImage(pdfDoc, stampPage, data.signatureImageBytes, {
       x: stampX + stampW - SIG_W - PADDING,
       y: stampY + STAMP_H - PADDING - SIG_H,
       width: SIG_W,
       height: SIG_H,
     });
 
-    return Buffer.from(await pdfDoc.save());
+    return { bytes: Buffer.from(await pdfDoc.save()), signatureWarning };
   }
 
-  /** Dibuja la imagen de la firma centrada dentro de un recuadro con borde, preservando su proporción. */
+  /**
+   * Dibuja la imagen de la firma centrada dentro de un recuadro con borde, preservando su
+   * proporción. Si no se pudo incluir (sin bytes, o `pdf-lib` no logró interpretar el PNG),
+   * el recuadro queda vacío y se devuelve el motivo — quien llama decide qué hacer con eso
+   * (ej. dejarlo en el Historial del documento), porque el estampado en sí no debe fallar
+   * por esto.
+   */
   private async drawSignatureImage(
     pdfDoc: PDFDocument,
     page: PDFPage,
     imageBytes: Buffer | undefined,
     box: { x: number; y: number; width: number; height: number },
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     page.drawRectangle({
       x: box.x,
       y: box.y,
@@ -179,7 +202,9 @@ export class SignaturePdfStampService {
       borderWidth: 0.5,
     });
 
-    if (!imageBytes) return;
+    if (!imageBytes) {
+      return 'No se recibió la imagen dibujada de la firma.';
+    }
 
     try {
       const image = await pdfDoc.embedPng(imageBytes);
@@ -192,8 +217,10 @@ export class SignaturePdfStampService {
         width: drawW,
         height: drawH,
       });
+      return undefined;
     } catch (err) {
-      console.warn('[SignaturePdfStampService] No se pudo embeber la imagen de la firma (no crítico):', err);
+      const reason = err instanceof Error ? err.message : String(err);
+      return `No se pudo interpretar la imagen de la firma (${imageBytes.length} bytes): ${reason}`;
     }
   }
 
@@ -246,7 +273,7 @@ export class SignaturePdfStampService {
   }
 
   /** Devuelve los bytes del PDF consolidado ya estampado — no escribe nada, eso lo decide quien llama. */
-  async stampConsolidatedPdf(target: StampTarget, data: ConsolidatedStampData): Promise<Buffer> {
+  async stampConsolidatedPdf(target: StampTarget, data: ConsolidatedStampData): Promise<ConsolidatedStampResult> {
     const pdfBytes = await this.readBytes(target);
     const pdfDoc = await PDFDocument.load(pdfBytes);
 
@@ -335,6 +362,7 @@ export class SignaturePdfStampService {
     y -= 14;
 
     const rowTextW = contentW - PADDING * 3 - ROW_SIG_W;
+    const signerWarnings: Array<{ signerName: string; reason: string }> = [];
 
     for (const signer of data.signers) {
       const rectBottom = y - (SIGNER_ROW_H - PADDING);
@@ -347,12 +375,15 @@ export class SignaturePdfStampService {
       });
 
       // Firma dibujada por el firmante, a la derecha de la fila.
-      await this.drawSignatureImage(pdfDoc, stampPage, signer.signatureImageBytes, {
+      const signatureWarning = await this.drawSignatureImage(pdfDoc, stampPage, signer.signatureImageBytes, {
         x: contentX + contentW - PADDING - ROW_SIG_W,
         y: rectBottom + (SIGNER_ROW_H - PADDING - ROW_SIG_H) / 2,
         width: ROW_SIG_W,
         height: ROW_SIG_H,
       });
+      if (signatureWarning) {
+        signerWarnings.push({ signerName: signer.signerName, reason: signatureWarning });
+      }
 
       let ty = y - PADDING;
 
@@ -398,7 +429,7 @@ export class SignaturePdfStampService {
       x: contentX, y, size: 6.5, font, color: rgb(0.45, 0.45, 0.45), maxWidth: contentW,
     });
 
-    return Buffer.from(await pdfDoc.save());
+    return { bytes: Buffer.from(await pdfDoc.save()), signerWarnings };
   }
 
   private resolveLocalPath(filePath: string): string {
