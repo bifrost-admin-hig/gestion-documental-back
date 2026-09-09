@@ -1225,6 +1225,7 @@ export class DependencyContainer {
       this.fileRepository,
       this.userSignatureRepository,
       this.documentVersioningService,
+      this.signatureFlowRepository,
     );
     this.cancelSignatureUseCase = new CancelSignatureUseCase(
       this.signatureRepository,
@@ -1383,6 +1384,7 @@ export class DependencyContainer {
       this.signatureFlowParticipantRepository,
       this.signatureCryptoService,
       this.processFlowParticipantActionUseCase,
+      this.signatureFlowRepository,
       this.colaboratorRepository,
       this.fileRepository,
       this.userSignatureRepository,

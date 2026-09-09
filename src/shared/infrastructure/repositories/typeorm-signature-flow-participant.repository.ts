@@ -116,6 +116,7 @@ export class TypeOrmSignatureFlowParticipantRepository implements SignatureFlowP
         'contract.contract_number as contractNumber',
         'flow.sent_at as sentAt',
         `TRIM(CONCAT_WS(' ', sender.first_name, sender.last_name)) as sentByName`,
+        'flow.require_signature_drawing as requiresSignatureDrawing',
       ])
       .orderBy('flow.sent_at', 'DESC')
       .addOrderBy('participant.created_at', 'ASC');
@@ -137,6 +138,7 @@ export class TypeOrmSignatureFlowParticipantRepository implements SignatureFlowP
       contractNumber: string | null;
       sentAt: Date | null;
       sentByName: string | null;
+      requiresSignatureDrawing: number | boolean;
     }>();
 
     return rows.map((row) => ({
@@ -152,6 +154,7 @@ export class TypeOrmSignatureFlowParticipantRepository implements SignatureFlowP
       contractNumber: row.contractNumber,
       sentAt: row.sentAt ? new Date(row.sentAt) : null,
       sentByName: row.sentByName?.trim() || null,
+      requiresSignatureDrawing: Boolean(row.requiresSignatureDrawing),
     }));
   }
 

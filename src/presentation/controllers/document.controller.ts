@@ -395,10 +395,10 @@ export class DocumentController {
   });
 
   private async getSignatureFlowInfoByDocumentId(documents: Document[]): Promise<{
-    activeFlowByDocumentId: Map<string, { id: string; sentBy: string | null }>;
+    activeFlowByDocumentId: Map<string, { id: string; sentBy: string | null; requireSignatureDrawing: boolean }>;
     documentIdsWithFlowHistory: Set<string>;
   }> {
-    const activeFlowByDocumentId = new Map<string, { id: string; sentBy: string | null }>();
+    const activeFlowByDocumentId = new Map<string, { id: string; sentBy: string | null; requireSignatureDrawing: boolean }>();
     const documentIdsWithFlowHistory = new Set<string>();
     if (!this.signatureFlowRepository) return { activeFlowByDocumentId, documentIdsWithFlowHistory };
 
@@ -413,7 +413,11 @@ export class DocumentController {
       documentIdsWithFlowHistory.add(flow.documentId);
       if (activeStatuses.has(flow.status) && !activeFlowByDocumentId.has(flow.documentId)) {
         // allFlows viene ordenado por created_at DESC, así que el primero que encontremos es el más reciente.
-        activeFlowByDocumentId.set(flow.documentId, { id: flow.id, sentBy: flow.sentBy });
+        activeFlowByDocumentId.set(flow.documentId, {
+          id: flow.id,
+          sentBy: flow.sentBy,
+          requireSignatureDrawing: flow.requireSignatureDrawing,
+        });
       }
     }
 
@@ -422,7 +426,7 @@ export class DocumentController {
 
   private toResponseDto(
     document: Document,
-    activeFlow?: { id: string; sentBy: string | null } | null,
+    activeFlow?: { id: string; sentBy: string | null; requireSignatureDrawing: boolean } | null,
     hasSignatureFlowHistory?: boolean,
   ): DocumentResponseDto {
     const json = document.toJSON();
@@ -465,6 +469,7 @@ export class DocumentController {
       updatedAt: json.updatedAt,
       activeSignatureFlowId: activeFlow?.id ?? null,
       activeSignatureFlowSentBy: activeFlow?.sentBy ?? null,
+      activeSignatureFlowRequiresDrawing: activeFlow ? activeFlow.requireSignatureDrawing : null,
       hasSignatureFlowHistory: hasSignatureFlowHistory ?? false,
     };
   }

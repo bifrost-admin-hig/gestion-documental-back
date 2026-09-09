@@ -18,6 +18,8 @@ export interface SignatureStampData {
   signedAt: Date;
   /** PNG de la firma dibujada por el firmante. Si no viene, el estampado se hace sin ella. */
   signatureImageBytes?: Buffer;
+  /** Si es false, el flujo no requiere dibujo de firma: no se dibuja el recuadro en el PDF. Default: true. */
+  signatureRequired?: boolean;
   ipAddress: string;
   documentId: string;
   tokenHash: string;
@@ -31,6 +33,8 @@ export interface SignerStampData {
   signedAt: Date;
   /** PNG de la firma dibujada por el firmante. Si no viene, el estampado se hace sin ella. */
   signatureImageBytes?: Buffer;
+  /** Si es false, el flujo no requiere dibujo de firma: no se dibuja el recuadro en el PDF. Default: true. */
+  signatureRequired?: boolean;
   ipAddress: string;
   tokenHash: string;
 }
@@ -169,12 +173,16 @@ export class SignaturePdfStampService {
     });
 
     // Firma dibujada por el firmante, arriba del QR en la misma columna derecha.
-    const signatureWarning = await this.drawSignatureImage(pdfDoc, stampPage, data.signatureImageBytes, {
-      x: stampX + stampW - SIG_W - PADDING,
-      y: stampY + STAMP_H - PADDING - SIG_H,
-      width: SIG_W,
-      height: SIG_H,
-    });
+    // Si el flujo no exige dibujo (signatureRequired === false), no se dibuja ni el
+    // recuadro: no tendría sentido mostrar un espacio vacío para algo que nunca se pidió.
+    const signatureWarning = data.signatureRequired === false
+      ? undefined
+      : await this.drawSignatureImage(pdfDoc, stampPage, data.signatureImageBytes, {
+        x: stampX + stampW - SIG_W - PADDING,
+        y: stampY + STAMP_H - PADDING - SIG_H,
+        width: SIG_W,
+        height: SIG_H,
+      });
 
     return { bytes: Buffer.from(await pdfDoc.save()), signatureWarning };
   }
@@ -374,15 +382,19 @@ export class SignaturePdfStampService {
         borderWidth: 0.5,
       });
 
-      // Firma dibujada por el firmante, a la derecha de la fila.
-      const signatureWarning = await this.drawSignatureImage(pdfDoc, stampPage, signer.signatureImageBytes, {
-        x: contentX + contentW - PADDING - ROW_SIG_W,
-        y: rectBottom + (SIGNER_ROW_H - PADDING - ROW_SIG_H) / 2,
-        width: ROW_SIG_W,
-        height: ROW_SIG_H,
-      });
-      if (signatureWarning) {
-        signerWarnings.push({ signerName: signer.signerName, reason: signatureWarning });
+      // Firma dibujada por el firmante, a la derecha de la fila. Si el flujo no exige
+      // dibujo, no se dibuja ni el recuadro — no tendría sentido un espacio vacío para
+      // algo que nunca se pidió.
+      if (signer.signatureRequired !== false) {
+        const signatureWarning = await this.drawSignatureImage(pdfDoc, stampPage, signer.signatureImageBytes, {
+          x: contentX + contentW - PADDING - ROW_SIG_W,
+          y: rectBottom + (SIGNER_ROW_H - PADDING - ROW_SIG_H) / 2,
+          width: ROW_SIG_W,
+          height: ROW_SIG_H,
+        });
+        if (signatureWarning) {
+          signerWarnings.push({ signerName: signer.signerName, reason: signatureWarning });
+        }
       }
 
       let ty = y - PADDING;

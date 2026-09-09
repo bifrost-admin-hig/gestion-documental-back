@@ -65,6 +65,10 @@ export class SignatureFlowEntity {
   @Column({ name: 'auto_close_interval_minutes', type: 'int', default: 43200 })
   autoCloseIntervalMinutes!: number;
 
+  /** Si es false, los firmantes solo validan con OTP: no dibujan firma ni se estampa el recuadro en el PDF. */
+  @Column({ name: 'require_signature_drawing', type: 'boolean', default: true })
+  requireSignatureDrawing!: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

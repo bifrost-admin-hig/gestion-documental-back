@@ -35,6 +35,7 @@ export interface ExternalAccessInfo {
     canAct: boolean;
     requiresDocumentNumber: boolean;
     canSaveSignature: boolean;
+    requiresSignatureDrawing: boolean;
   } | null;
   document: {
     id: string;
@@ -103,6 +104,7 @@ export class GetExternalParticipantAccessUseCase {
         canAct,
         requiresDocumentNumber: !participant.colaboratorId,
         canSaveSignature: Boolean(participant.colaboratorId),
+        requiresSignatureDrawing: flow.requireSignatureDrawing,
       },
       document: { id: document.id, name: document.name, documentUrl: document.documentUrl ?? null },
       flow: { id: flow.id, status: flow.status },
@@ -308,6 +310,7 @@ export class ValidateExternalSignerOtpUseCase {
     private readonly participantRepository: SignatureFlowParticipantRepository,
     private readonly cryptoService: SignatureCryptoService,
     private readonly processFlowUseCase: ProcessFlowParticipantActionUseCase,
+    private readonly flowRepository: SignatureFlowRepository,
     private readonly colaboratorRepository?: ColaboratorRepository,
     private readonly fileRepository?: TypeOrmFileRepository,
     private readonly userSignatureRepository?: UserSignatureRepository,
@@ -349,10 +352,15 @@ export class ValidateExternalSignerOtpUseCase {
       throw new ValidationError(`Código incorrecto. Te quedan ${remaining} intento(s).`);
     }
 
-    if (!signatureImage) {
+    const flow = await this.flowRepository.findById(participant.flowId);
+    const requiresDrawing = flow?.requireSignatureDrawing ?? true;
+
+    if (requiresDrawing && !signatureImage) {
       throw new ValidationError('Debes dibujar tu firma para completar el proceso.');
     }
-    const signatureImageBuffer = decodeSignatureImage(signatureImage);
+    const signatureImageBuffer = requiresDrawing && signatureImage
+      ? decodeSignatureImage(signatureImage)
+      : null;
 
     const signedAt = new Date();
     const signatureTokenHash = this.cryptoService.generateTokenHash({
@@ -367,7 +375,7 @@ export class ValidateExternalSignerOtpUseCase {
       : documentNumber ?? null;
 
     let signatureImageFileId: string | null = null;
-    if (this.fileRepository) {
+    if (this.fileRepository && signatureImageBuffer) {
       const savedImage = await this.fileRepository.saveBuffer(signatureImageBuffer, 'signature.png', 'image/png');
       signatureImageFileId = savedImage.id;
 
