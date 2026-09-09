@@ -63,6 +63,11 @@ export class DocumentVersioningService {
    * Dos entradas de Historial para el reemplazo de archivo: una en el documento vivo
    * (con el diff antes/después que ya sabe leer `DocumentHistoryChangeCard`), y otra en
    * el documento archivado (con la referencia hacia adelante, igual que en la edición).
+   *
+   * `extraChanges` permite adjuntar referencias a otros archivos relacionados con el
+   * estampado (ej. la imagen PNG de la firma dibujada de cada firmante) como entradas
+   * adicionales del diff, previsualizables desde la misma UI de Historial — es la única
+   * forma de auditar esa imagen sin acceso a la base de datos o al bucket S3.
    */
   async recordFileReplacedHistory(params: {
     liveDocument: Document;
@@ -72,8 +77,11 @@ export class DocumentVersioningService {
     updatedBy?: string;
     updatedByName?: string;
     comment: string;
+    extraChanges?: Array<{ field: string; label: string; afterFileId: string }>;
   }): Promise<void> {
-    const { liveDocument, archivedDocument, previousDocumentUrl, action, updatedBy, updatedByName, comment } = params;
+    const {
+      liveDocument, archivedDocument, previousDocumentUrl, action, updatedBy, updatedByName, comment, extraChanges,
+    } = params;
 
     const liveHistoryProps: DocumentHistoryProps = {
       documentId: liveDocument.id,
@@ -87,14 +95,23 @@ export class DocumentVersioningService {
       status: liveDocument.status,
       comment,
       actionComment: JSON.stringify({
-        changes: [{
-          field: 'documentUrl',
-          label: 'Archivo',
-          before: 'Archivo anterior',
-          after: 'Archivo firmado',
-          beforeFileId: previousDocumentUrl,
-          afterFileId: liveDocument.documentUrl,
-        }],
+        changes: [
+          {
+            field: 'documentUrl',
+            label: 'Archivo',
+            before: 'Archivo anterior',
+            after: 'Archivo firmado',
+            beforeFileId: previousDocumentUrl,
+            afterFileId: liveDocument.documentUrl,
+          },
+          ...(extraChanges ?? []).map((c) => ({
+            field: c.field,
+            label: c.label,
+            before: null,
+            after: 'Ver imagen',
+            afterFileId: c.afterFileId,
+          })),
+        ],
         archivedVersionId: archivedDocument.id,
       }),
       action,

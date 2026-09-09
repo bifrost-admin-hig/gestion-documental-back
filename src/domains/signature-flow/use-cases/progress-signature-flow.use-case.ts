@@ -570,6 +570,7 @@ export class ProcessFlowParticipantActionUseCase {
       const documentSignatures = await this.signatureRepository.findByDocumentId(document.id);
       const signerData: SignerStampData[] = [];
       const missingSignatureReasons: string[] = [];
+      const signatureImageFiles: Array<{ signerName: string; fileId: string }> = [];
       for (const s of signedSigners) {
         if (s.userId) {
           // Internal signer — look up Signature record for tokenHash/IP
@@ -585,11 +586,15 @@ export class ProcessFlowParticipantActionUseCase {
             ? await this.colaboratorRepository.findByUserId(s.userId)
             : null;
 
+          const signerName = `${user.firstName} ${user.lastName}`;
           const { bytes, reason } = await this.loadSignatureImageBytes(signature.signatureImageFileId);
-          if (reason) missingSignatureReasons.push(`${user.firstName} ${user.lastName}: ${reason}`);
+          if (reason) missingSignatureReasons.push(`${signerName}: ${reason}`);
+          if (signature.signatureImageFileId) {
+            signatureImageFiles.push({ signerName, fileId: signature.signatureImageFileId });
+          }
 
           signerData.push({
-            signerName: `${user.firstName} ${user.lastName}`,
+            signerName,
             signerDocumentNumber: colaborator?.numeroDocumento ?? 'N/A',
             signerEmail: String(user.email),
             signedAt: signature.signedAt ?? s.actionAt ?? new Date(),
@@ -603,11 +608,15 @@ export class ProcessFlowParticipantActionUseCase {
             ? await this.externalTokenRepository.findByParticipantId(s.id)
             : null;
 
+          const signerName = s.externalName ?? 'Firmante externo';
           const { bytes, reason } = await this.loadSignatureImageBytes(extToken?.signatureImageFileId ?? null);
-          if (reason) missingSignatureReasons.push(`${s.externalName ?? 'Firmante externo'}: ${reason}`);
+          if (reason) missingSignatureReasons.push(`${signerName}: ${reason}`);
+          if (extToken?.signatureImageFileId) {
+            signatureImageFiles.push({ signerName, fileId: extToken.signatureImageFileId });
+          }
 
           signerData.push({
-            signerName: s.externalName ?? 'Firmante externo',
+            signerName,
             signerDocumentNumber: extToken?.documentNumber ?? 'N/A',
             signerEmail: s.externalEmail,
             signedAt: s.actionAt ?? new Date(),
@@ -634,7 +643,7 @@ export class ProcessFlowParticipantActionUseCase {
         ...signerWarnings.map((w) => `${w.signerName}: ${w.reason}`),
       ];
 
-      await this.persistStampedDocument(document, stampedBytes, allReasons);
+      await this.persistStampedDocument(document, stampedBytes, allReasons, signatureImageFiles);
     } catch (err) {
       console.warn('[ProcessFlowParticipantActionUseCase] Consolidated PDF stamping failed (non-critical):', err);
     }
@@ -645,14 +654,16 @@ export class ProcessFlowParticipantActionUseCase {
    * archiva la versión previa del documento, para poder compararlas o recuperar el
    * original ante cualquier error — mismo patrón que ya usa UpdateDocumentUseCase al
    * reemplazar el archivo de un documento.
-   * `signatureIssues`, si viene, queda registrado en el Historial: es la única forma en
-   * que alguien sin acceso a los logs del servidor puede enterarse de que el dibujo de
-   * la firma de algún firmante no se pudo incluir en el PDF.
+   * `signatureIssues`, si viene, queda registrado en el Historial. `signatureImageFiles`
+   * adjunta la imagen PNG cruda de cada firmante como entrada previsualizable del
+   * Historial — así se puede auditar visualmente lo que realmente quedó guardado sin
+   * necesitar acceso a los logs del servidor, la base de datos ni el bucket S3.
    */
   private async persistStampedDocument(
     document: Document,
     stampedBytes: Buffer,
     signatureIssues: string[] = [],
+    signatureImageFiles: Array<{ signerName: string; fileId: string }> = [],
   ): Promise<void> {
     if (!this.fileRepository) return;
 
@@ -686,6 +697,11 @@ export class ProcessFlowParticipantActionUseCase {
         liveDocument: document,
         archivedDocument: archived,
         previousDocumentUrl,
+        extraChanges: signatureImageFiles.map((f) => ({
+          field: `signatureImage:${f.fileId}`,
+          label: `Firma dibujada — ${f.signerName}`,
+          afterFileId: f.fileId,
+        })),
         action: DocumentAction.VERSION_SUPERSEDED,
         updatedByName: 'Sistema',
         comment,

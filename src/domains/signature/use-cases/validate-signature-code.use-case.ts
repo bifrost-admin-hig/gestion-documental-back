@@ -208,7 +208,7 @@ export class ValidateSignatureCodeUseCase {
       });
 
       const signatureIssue = missingSignatureReason ?? signatureWarning;
-      await this.persistStampedDocument(document, stampedBytes, userId, signatureIssue);
+      await this.persistStampedDocument(document, stampedBytes, userId, signatureIssue, signatureImageFileId ?? undefined);
       return true;
     } catch (err) {
       console.warn('[ValidateSignatureCodeUseCase] PDF stamping failed (non-critical):', err);
@@ -227,6 +227,7 @@ export class ValidateSignatureCodeUseCase {
     stampedBytes: Buffer,
     userId: string,
     signatureIssue?: string,
+    signatureImageFileId?: string,
   ): Promise<void> {
     if (!this.fileRepository) return;
 
@@ -260,6 +261,13 @@ export class ValidateSignatureCodeUseCase {
         liveDocument: document,
         archivedDocument: archived,
         previousDocumentUrl,
+        extraChanges: signatureImageFileId
+          ? [{
+            field: `signatureImage:${signatureImageFileId}`,
+            label: 'Firma dibujada',
+            afterFileId: signatureImageFileId,
+          }]
+          : undefined,
         action: DocumentAction.SIGNATURE_SIGNED,
         updatedBy: userId,
         comment,
