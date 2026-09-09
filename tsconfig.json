@@ -18,6 +18,8 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false,
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "paths": {
       "@domains/*": ["./src/domains/*"],
       "@shared/*": ["./src/shared/*"],
