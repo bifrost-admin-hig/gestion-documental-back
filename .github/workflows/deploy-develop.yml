@@ -134,6 +134,7 @@ jobs:
 
             # Build Application
             echo "🏗️ Building backend application..."
+            export NODE_OPTIONS="--max-old-space-size=1024"
             bun run build || echo "Build step completed (may not be required)"
             echo "✅ Application build completed"
 
