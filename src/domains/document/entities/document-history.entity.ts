@@ -21,6 +21,8 @@ export interface DocumentHistoryProps {
   updatedByName?: string;
   updatedByLastName?: string;
   updatedAt?: Date;
+  flowParticipantId?: string | null;
+  actionComment?: string | null;
 }
 
 export class DocumentHistory {
@@ -40,6 +42,8 @@ export class DocumentHistory {
   updatedByName?: string;
   updatedByLastName?: string;
   updatedAt: Date;
+  flowParticipantId: string | null;
+  actionComment: string | null;
 
   constructor(props: DocumentHistoryProps) {
     DocumentHistory.validateRequired(props);
@@ -53,6 +57,8 @@ export class DocumentHistory {
       comment: (comment?: string | null) => comment || null,
       action: (action: string) => parseEnum(action, DocumentAction) ?? DocumentAction.CREATED,
       updatedAt: 'datetime',
+      flowParticipantId: (v?: string | null) => v || null,
+      actionComment: (v?: string | null) => v || null,
     });
   }
 
@@ -124,6 +130,10 @@ export class DocumentHistory {
       comment: this.comment,
       action: this.action,
       updatedBy: this.updatedBy,
+      updatedByName: this.updatedByName,
+      updatedByLastName: this.updatedByLastName,
+      flowParticipantId: this.flowParticipantId,
+      actionComment: this.actionComment,
       isExpired: this.isExpired,
       daysUntilExpiration: this.daysUntilExpiration,
       updatedAt: DateTimeUtils.toString(this.updatedAt),

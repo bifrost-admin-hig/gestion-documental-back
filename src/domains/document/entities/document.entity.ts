@@ -3,6 +3,12 @@ import { ValidationError } from '@shared/domain/errors';
 import { DateTimeUtils, DateUtils } from '@shared/utils/date';
 import { parseEnum } from '@shared/utils/objects';
 import { DocumentStatus } from '../value-objects/document-enums';
+import { SignatureStatus } from '@domains/signature/value-objects/signature-enums';
+
+export interface DocumentFieldValue {
+  fieldName: string;
+  fieldValue: string | null;
+}
 
 export interface DocumentProps {
   id?: string;
@@ -17,6 +23,17 @@ export interface DocumentProps {
   description?: string;
   documentUrl?: string;
   status?: string;
+  signatureStatus?: string | null;
+  preFlowStatus?: string | null;
+  signatureFlowId?: string | null;
+  previousVersionId?: string | null;
+  isSuperseded?: boolean;
+  code?: string | null;
+  reviewDate?: Date | null;
+  responsibleColaboratorId?: string | null;
+  responsibleColaboratorName?: string | null;
+  areaId?: string | null;
+  areaName?: string | null;
   groupId: number;
   requiredColaboratorsCount?: number;
   createdBy?: string;
@@ -25,8 +42,12 @@ export interface DocumentProps {
   deletedBy?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
+  templateId?: string | null;
+  fieldValues?: DocumentFieldValue[];
 
   // Read-only properties from DocumentModel (for display)
+  familyId?: string;
+  familyName?: string;
   documentTypeId?: string;
   documentSubtypeId?: string;
   documentTypeName?: string;
@@ -49,6 +70,17 @@ export class Document {
   description?: string;
   documentUrl?: string;
   status: DocumentStatus;
+  signatureStatus: SignatureStatus | null;
+  preFlowStatus: DocumentStatus | null;
+  signatureFlowId: string | null;
+  previousVersionId: string | null;
+  isSuperseded: boolean;
+  code: string | null;
+  reviewDate: Date | null;
+  responsibleColaboratorId: string | null;
+  responsibleColaboratorName?: string | null;
+  areaId: string | null;
+  areaName?: string | null;
   groupId: number;
   requiredColaboratorsCount: number;
   createdBy: string | null;
@@ -57,8 +89,12 @@ export class Document {
   deletedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
+  templateId: string | null;
+  fieldValues: DocumentFieldValue[];
 
   // Read-only properties
+  familyId?: string;
+  familyName?: string;
   documentTypeId?: string;
   documentSubtypeId?: string;
   documentTypeName?: string;
@@ -77,6 +113,15 @@ export class Document {
       expirationDate: 'dateNullable',
       contractId: (contractId?: string | null) => contractId || null,
       status: (status?: string) => parseEnum(status, DocumentStatus) ?? DocumentStatus.DRAFT,
+      signatureStatus: (ss?: string | null) => parseEnum(ss, SignatureStatus) ?? null,
+      preFlowStatus: (v?: string | null) => parseEnum(v, DocumentStatus) ?? null,
+      signatureFlowId: (v?: string | null) => v || null,
+      previousVersionId: (v?: string | null) => v || null,
+      isSuperseded: (v?: boolean) => v ?? false,
+      code: (v?: string | null) => (v ? v.trim() : null),
+      reviewDate: 'dateNullable',
+      responsibleColaboratorId: (v?: string | null) => v || null,
+      areaId: (v?: string | null) => v || null,
       requiredColaboratorsCount: (value?: number) => value ?? 0,
       createdBy: (createdBy?: string) => createdBy || null,
       comment: (comment?: string | null) => comment || null,
@@ -85,9 +130,13 @@ export class Document {
       createdAt: 'datetime',
       updatedAt: 'datetime',
       colaboratorIds: (ids?: string[]) => ids ?? [],
+      templateId: (id?: string | null) => id || null,
+      fieldValues: (vals?: DocumentFieldValue[]) => vals ?? [],
     });
 
     // Assign read-only props
+    this.familyId = props.familyId;
+    this.familyName = props.familyName;
     this.documentTypeId = props.documentTypeId;
     this.documentSubtypeId = props.documentSubtypeId;
     this.documentTypeName = props.documentTypeName;
@@ -226,6 +275,49 @@ export class Document {
     this.updatedAt = new Date();
   }
 
+  public updateCode(code?: string | null): void {
+    const trimmed = code?.trim();
+    if (trimmed && trimmed.length > 100) {
+      throw new ValidationError('El código del documento no puede exceder 100 caracteres');
+    }
+    this.code = trimmed || null;
+    this.updatedAt = new Date();
+  }
+
+  public updateReviewDate(reviewDate?: Date | null): void {
+    this.reviewDate = reviewDate || null;
+    this.updatedAt = new Date();
+  }
+
+  public updateResponsibleColaboratorId(responsibleColaboratorId?: string | null): void {
+    this.responsibleColaboratorId = responsibleColaboratorId || null;
+    this.updatedAt = new Date();
+  }
+
+  public updateAreaId(areaId?: string | null): void {
+    this.areaId = areaId || null;
+    this.updatedAt = new Date();
+  }
+
+  /**
+   * Calcula la fecha de próxima revisión por defecto cuando no se indica una manualmente:
+   * 1. Por defecto, 30 días después de la fecha en que el documento se creó en la plataforma
+   *    (no la fecha de emisión, que puede ser muy anterior a la carga del documento).
+   * 2. Si esa fecha (creación + 30) cae en la fecha de vencimiento o después, no queda margen
+   *    de revisión: se deja 10 días antes del vencimiento en su lugar.
+   */
+  public static calculateDefaultReviewDate(createdAt?: Date | null, expirationDate?: Date | null): Date | null {
+    if (!createdAt) return null;
+
+    const defaultReviewDate = DateUtils.addDays(createdAt, 30);
+
+    if (expirationDate && !DateUtils.isBefore(defaultReviewDate, expirationDate)) {
+      return DateUtils.addDays(expirationDate, -10);
+    }
+
+    return defaultReviewDate;
+  }
+
   public updateStatus(status: DocumentStatus, comment?: string | null): void {
     this.status = status;
     this.comment = comment ? comment.trim() : null;
@@ -295,6 +387,15 @@ export class Document {
     this.updatedAt = new Date();
   }
 
+  public approveDirectly(): void {
+    if (this.status !== DocumentStatus.DRAFT && this.status !== DocumentStatus.IN_REVIEW) {
+      throw new ValidationError('Solo los documentos en borrador o revisión pueden aprobarse directamente');
+    }
+    this.status = DocumentStatus.APPROVED;
+    this.comment = null;
+    this.updatedAt = new Date();
+  }
+
   public reject(): void {
     if (this.status !== DocumentStatus.IN_REVIEW) {
       throw new ValidationError('Solo los documentos en revisión pueden rechazarse');
@@ -319,6 +420,23 @@ export class Document {
     this.updatedAt = new Date();
   }
 
+  public setToUploaded(): void {
+    this.status = DocumentStatus.UPLOADED;
+    this.comment = null;
+    this.updatedAt = new Date();
+  }
+
+  public setPendingNotification(): void {
+    this.status = DocumentStatus.PENDING_NOTIFICATION;
+    this.comment = null;
+    this.updatedAt = new Date();
+  }
+
+  public updateSignatureStatus(status: SignatureStatus | null): void {
+    this.signatureStatus = status;
+    this.updatedAt = new Date();
+  }
+
   public toJSON() {
     return {
       id: this.id,
@@ -333,6 +451,13 @@ export class Document {
       description: this.description,
       documentUrl: this.documentUrl,
       status: this.status,
+      signatureStatus: this.signatureStatus,
+      code: this.code,
+      reviewDate: DateUtils.toString(this.reviewDate, true),
+      responsibleColaboratorId: this.responsibleColaboratorId,
+      responsibleColaboratorName: this.responsibleColaboratorName,
+      areaId: this.areaId,
+      areaName: this.areaName,
       groupId: this.groupId,
       requiredColaboratorsCount: this.requiredColaboratorsCount,
       createdBy: this.createdBy,
@@ -345,6 +470,8 @@ export class Document {
       updatedAt: DateTimeUtils.toString(this.updatedAt),
 
       // Read-only properties
+      familyId: this.familyId,
+      familyName: this.familyName,
       documentTypeId: this.documentTypeId,
       documentSubtypeId: this.documentSubtypeId,
       documentTypeName: this.documentTypeName,

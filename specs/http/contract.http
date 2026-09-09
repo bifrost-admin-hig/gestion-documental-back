@@ -141,3 +141,35 @@ Authorization: Bearer user-id:{{ userId }}
 {
 }
 
+###
+
+# ============================================
+# DOCUMENT STRUCTURE
+# ============================================
+
+# @name get-document-structure
+# Get document structure (expected vs loaded documents) for a contract
+GET {{baseUrl}}/{{module}}/{{id}}/document-structure
+Authorization: Bearer user-id:{{ userId }}
+
+###
+
+# @name get-document-structure-filter-family
+# Filter by familyId
+GET {{baseUrl}}/{{module}}/{{id}}/document-structure?familyId=FAMILY_ID_HERE
+Authorization: Bearer user-id:{{ userId }}
+
+###
+
+# @name get-document-structure-filter-incomplete
+# Show only incomplete (missing) documents
+GET {{baseUrl}}/{{module}}/{{id}}/document-structure?status=incomplete
+Authorization: Bearer user-id:{{ userId }}
+
+###
+
+# @name get-document-structure-filter-complete
+# Show only complete (uploaded) documents
+GET {{baseUrl}}/{{module}}/{{id}}/document-structure?status=complete
+Authorization: Bearer user-id:{{ userId }}
+

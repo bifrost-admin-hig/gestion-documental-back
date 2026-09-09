@@ -43,6 +43,7 @@ import { GetUserByIdUseCase } from '@domains/user/use-cases/get-user.use-case';
 import { AddColaboratorToContractUseCase } from '@domains/contract/use-cases/add-colaborator-to-contract.use-case';
 import { RemoveColaboratorFromContractUseCase } from '@domains/contract/use-cases/remove-colaborator-from-contract.use-case';
 import { GetContractColaboratorsUseCase } from '@domains/contract/use-cases/get-contract-colaborators.use-case';
+import { GetContractDocumentStructureUseCase } from '@domains/contract/use-cases/get-contract-document-structure.use-case';
 import { Colaborator } from '@domains/colaborators/entities/colaborator.entity';
 import { ValidationError } from '@shared/domain/errors';
 
@@ -78,6 +79,7 @@ export class ContractController {
     private readonly removeColaboratorFromContractUseCase: RemoveColaboratorFromContractUseCase,
     private readonly getContractColaboratorsUseCase: GetContractColaboratorsUseCase,
     private readonly getParentContractsUseCase: GetParentContractsUseCase,
+    private readonly getContractDocumentStructureUseCase: GetContractDocumentStructureUseCase,
   ) { }
 
 
@@ -238,7 +240,7 @@ export class ContractController {
   public updateContract = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const dto: UpdateContractDto = req.body;
-    const user = (req as any).user;
+    const user = req.auth.user;
 
     const updateRequest = {
       ...dto,
@@ -468,5 +470,17 @@ export class ContractController {
       data: colaborators.map((c: Colaborator) => c.toJSON()),
       count: colaborators.length,
     });
+  });
+
+  public getDocumentStructure = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { familyId, documentTypeId, documentSubtypeId, status } = req.query as Record<string, string>;
+    const items = await this.getContractDocumentStructureUseCase.execute(id, {
+      familyId,
+      documentTypeId,
+      documentSubtypeId,
+      status: status as 'complete' | 'incomplete' | undefined,
+    });
+    res.status(200).json({ success: true, data: items, count: items.length });
   });
 }

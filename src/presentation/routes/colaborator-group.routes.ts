@@ -4,6 +4,7 @@ import { validateRequest } from '@shared/middleware/validation';
 import { createColaboratorGroupSchema, updateColaboratorGroupSchema, assignColaboratorsToGroupSchema } from '../dto/validation-schemas';
 import { auth } from '@shared/middleware/auth.middleware';
 import { authorize } from '@shared/middleware/authorize.middleware';
+import { getByGroup } from '@shared/middleware/group.middleware';
 
 export const createColaboratorGroupRoutes = (colaboratorGroupController: ColaboratorGroupController): Router => {
   const router = Router();
@@ -11,7 +12,7 @@ export const createColaboratorGroupRoutes = (colaboratorGroupController: Colabor
 
   // CRUD Colaborator Groups
   router.post('/', authorize('colaborator-group:create'), validateRequest(createColaboratorGroupSchema), colaboratorGroupController.createGroup);
-  router.get('/', authorize('colaborator-group:read'), colaboratorGroupController.getGroups);
+  router.get('/', authorize('colaborator-group:read'), getByGroup(), colaboratorGroupController.getGroups);
   router.get('/:id', authorize('colaborator-group:read'), colaboratorGroupController.getGroupById);
   router.put('/:id', authorize('colaborator-group:update'), validateRequest(updateColaboratorGroupSchema), colaboratorGroupController.updateGroup);
   router.delete('/:id', authorize('colaborator-group:delete'), colaboratorGroupController.deleteGroup);

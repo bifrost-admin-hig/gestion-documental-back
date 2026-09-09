@@ -36,7 +36,7 @@ export class ColaboratorGroupController {
   });
 
   public getGroups = asyncHandler(async (req: Request, res: Response) => {
-    const groups = await this.getAllColaboratorGroupsUseCase.execute();
+    const groups = await this.getAllColaboratorGroupsUseCase.execute(req.auth?.groupId);
     res.status(200).json({
       success: true,
       data: groups.map(g => g.toJSON()),

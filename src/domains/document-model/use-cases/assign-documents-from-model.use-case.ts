@@ -67,11 +67,17 @@ export class AssignDocumentsFromModelUseCase {
         continue;
       }
 
+      // Crear el documento
+      const typeName = model.documentTypeName || model.documentTypeId;
+      const subtypeName = model.documentSubtypeName || model.documentSubtypeId;
+      const docName = `${typeName} - ${subtypeName}`;
+
       // Verificar si ya existe un documento con esta combinación
       const exists = await this.documentRepository.existsByModelContractColaborator(
         model.id,
         contractId,
         [colaboratorId],
+        docName,
       );
 
       if (exists) {
@@ -79,14 +85,10 @@ export class AssignDocumentsFromModelUseCase {
         continue;
       }
 
-      // Crear el documento
-      const typeName = model.documentTypeName || model.documentTypeId;
-      const subtypeName = model.documentSubtypeName || model.documentSubtypeId;
-
       const props: DocumentProps = {
         documentModelId: model.id,
         colaboratorIds: [colaboratorId],
-        name: `${typeName} - ${subtypeName}`,
+        name: docName,
         contractId: contractId,
         createdBy: request.createdBy,
         groupId: colaborator.groupId,

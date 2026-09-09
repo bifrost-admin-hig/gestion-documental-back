@@ -3,6 +3,7 @@ import { DocumentStatus } from '../value-objects/document-enums';
 
 export interface DocumentRepository {
   findById(id: string): Promise<Document | null>;
+  findByIds(ids: string[]): Promise<Document[]>;
   findAll(groupId?: number, filters?: {
     contractId?: string;
     colaboratorId?: string;
@@ -18,7 +19,8 @@ export interface DocumentRepository {
   findByColaboratorIds(colaboratorIds: string[]): Promise<Document[]>;
   findExpiredDocuments(): Promise<Document[]>;
   findExpiringDocuments(days: number): Promise<Document[]>;
-  existsByModelAndColaborator(documentModelId: string, colaboratorIds: string[], excludeId?: string): Promise<boolean>;
-  existsByModelContractColaborator(documentModelId: string, contractId: string, colaboratorIds: string[], excludeId?: string): Promise<boolean>;
+  existsByModelAndColaborator(documentModelId: string, colaboratorIds: string[], name: string, excludeId?: string): Promise<boolean>;
+  existsByModelContractColaborator(documentModelId: string, contractId: string, colaboratorIds: string[], name: string, excludeId?: string): Promise<boolean>;
+  existsByCode(code: string, groupId: number, excludeId?: string): Promise<boolean>;
   findByTypeAndSubtypeId(typeId: string, subtypeId: string): Promise<Document[]>;
 }

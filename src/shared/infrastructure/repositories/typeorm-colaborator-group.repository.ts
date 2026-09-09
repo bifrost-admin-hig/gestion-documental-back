@@ -25,8 +25,16 @@ export class TypeOrmColaboratorGroupRepository implements ColaboratorGroupReposi
     await this.repository.save(entity);
   }
 
-  async findAll(): Promise<ColaboratorGroup[]> {
-    const entities = await this.repository.find({ relations: ['colaborators'] });
+  async findAll(groupId?: number): Promise<ColaboratorGroup[]> {
+    const qb = this.repository.createQueryBuilder('cg')
+      .leftJoinAndSelect('cg.colaborators', 'colaborators');
+
+    if (groupId !== undefined) {
+      qb.innerJoin('cg.contract', 'contract')
+        .where('contract.groupId = :groupId', { groupId });
+    }
+
+    const entities = await qb.getMany();
     return entities.map(ColaboratorGroupEntity.toDomain);
   }
 

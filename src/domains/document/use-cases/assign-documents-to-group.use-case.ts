@@ -65,10 +65,13 @@ export class AssignDocumentsToGroupUseCase {
         continue;
       }
 
+      const docName = request.name?.trim() || `${documentModel.documentTypeId} ${documentModel.documentSubtypeId}`;
+
       const exists = await this.documentRepository.existsByModelContractColaborator(
         request.documentModelId,
         contractId,
         [colaboratorId],
+        docName,
       );
       if (exists) {
         skipped.push(colaboratorId);
@@ -78,12 +81,13 @@ export class AssignDocumentsToGroupUseCase {
       const props: DocumentProps = {
         documentModelId: request.documentModelId,
         colaboratorIds: [colaboratorId],
-        name: request.name?.trim() || `${documentModel.documentTypeId} ${documentModel.documentSubtypeId}`,
+        name: docName,
         issuedDate: request.issuedDate,
         expirationDate: request.expirationDate,
         contractId: contractId,
         createdBy: request.createdBy,
         groupId: colaborator.groupId,
+        reviewDate: Document.calculateDefaultReviewDate(new Date(), request.expirationDate),
 
         // Read-only properties populated for completeness if needed immediately
         documentTypeId: documentModel.documentTypeId,

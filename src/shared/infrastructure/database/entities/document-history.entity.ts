@@ -17,6 +17,7 @@ import { UserEntity } from './user.entity';
 @Index('IDX_documents_history_action', ['action'])
 @Index('IDX_documents_history_updated_by', ['updatedBy'])
 @Index('IDX_documents_history_status', ['status'])
+@Index('IDX_documents_history_flow_participant_id', ['flowParticipantId'])
 export class DocumentHistoryEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -72,6 +73,15 @@ export class DocumentHistoryEntity {
   @ManyToOne(() => UserEntity, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'updated_by' })
   updater?: UserEntity;
+
+  @Column({ name: 'updated_by_name', type: 'varchar', length: 255, nullable: true })
+  updatedByName?: string;
+
+  @Column({ name: 'flow_participant_id', type: 'varchar', length: 36, nullable: true })
+  flowParticipantId?: string;
+
+  @Column({ name: 'action_comment', type: 'text', nullable: true })
+  actionComment?: string;
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;

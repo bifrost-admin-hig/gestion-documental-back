@@ -19,6 +19,7 @@ interface DocumentHistoryResponseDto {
   updatedBy?: string;
   updatedByName?: string;
   updatedByLastName?: string;
+  actionComment?: string | null;
   updatedAt: string;
 }
 
@@ -65,6 +66,7 @@ export class DocumentHistoryController {
       updatedBy: history.updatedBy,
       updatedByName: history.updatedByName,
       updatedByLastName: history.updatedByLastName,
+      actionComment: history.actionComment,
       updatedAt: history.updatedAt.toISOString(),
     };
   }

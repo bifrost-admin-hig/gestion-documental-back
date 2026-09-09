@@ -50,6 +50,10 @@ export const changeGroup = (handlers?: GroupIdHandlers & {
   // Si no existe, se mantiene el grupo actual.
   if (!groupId) return unsetGroupId(req.body), next();
 
+  // Si el grupo enviado es el mismo que ya tiene asignado el usuario, no es un cambio real
+  const userGroupId = parseNum(req.auth?.groupId);
+  if (userGroupId && groupId === userGroupId) return setGroupId(groupId), next();
+
   // Usuarios con los permisos user:change:group o admin:groups pueden cambiar el grupo.
   if (user.can(['user:change:group', 'admin:groups'])) {
     return setGroupId(groupId), next();

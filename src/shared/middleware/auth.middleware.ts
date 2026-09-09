@@ -47,7 +47,9 @@ async function init(req: Request): Promise<void> {
 
   // Si es un token normal, lo decodificamos para obtener el ID de usuario.
   try {
-    const { userId } = jwt.verify(token, process.env.JWT_SECRET || 'supersecretjwtkey') as { userId?: string };
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) throw new Error('JWT_SECRET environment variable is not set');
+    const { userId } = jwt.verify(token, jwtSecret) as { userId?: string };
     return loadUser(req, userId);
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {

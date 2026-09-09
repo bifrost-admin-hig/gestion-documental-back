@@ -30,8 +30,8 @@ export class ContractEntity {
   @Column({ name: 'rut_sociedad', type: 'varchar', length: 12 })
   rutSociedad!: string;
 
-  @Column({ name: 'nombre_colaborador', type: 'varchar', length: 255 })
-  nombreColaborador!: string;
+  @Column({ name: 'nombre_colaborador', type: 'varchar', length: 255, nullable: true })
+  nombreColaborador?: string;
 
   @Column({ name: 'start_date', type: 'date' })
   startDate!: Date;
@@ -41,7 +41,7 @@ export class ContractEntity {
 
   @EnumColumn({
     name: 'contract_type',
-    enum: ['indefinido', 'plazo_fijo', 'obra_faena', 'consultoria', 'honorarios'],
+    enum: ['indefinido', 'plazo_fijo', 'obra_faena', 'faena', 'consultoria', 'honorarios'],
   })
   contractType!: string;
 
@@ -101,10 +101,13 @@ export class ContractEntity {
 
   @EnumColumn({
     name: 'jornada_trabajo',
-    enum: ['completa', 'parcial', 'turno', 'especial'],
+    enum: ['completa', 'parcial', 'turno', 'especial', 'excepcional'],
     default: 'completa',
   })
   jornadaTrabajo!: string;
+
+  @Column({ name: 'turnos', type: 'varchar', length: 255, nullable: true, default: null })
+  turnos?: string;
 
   @EnumColumn({
     enum: ['draft', 'active', 'suspended', 'terminated', 'expired'],

@@ -33,6 +33,7 @@ export interface ColaboratorProps {
   cargo: string;
   groupId: number;
   status?: ColaboratorStatus;
+  userId?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date | null;
@@ -67,6 +68,7 @@ export interface ColaboratorJson {
   groupId: number;
   status: ColaboratorStatus;
   isActive: boolean;
+  userId?: string | null;
   contractIds?: string[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -102,6 +104,7 @@ export class Colaborator extends BaseEntity {
     public createdAt: Date,
     public updatedAt: Date,
     public deletedAt: Date | null,
+    private _userId: string | null | undefined,
     public contractIds?: string[],
   ) {
     super();
@@ -144,6 +147,7 @@ export class Colaborator extends BaseEntity {
       props.createdAt || new Date(),
       props.updatedAt || new Date(),
       props.deletedAt || null,
+      props.userId ?? null,
       props.contractIds,
     );
   }
@@ -179,6 +183,7 @@ export class Colaborator extends BaseEntity {
       props.createdAt! instanceof Date ? props.createdAt! : new Date(props.createdAt!),
       props.updatedAt! instanceof Date ? props.updatedAt! : new Date(props.updatedAt!),
       props.deletedAt ? (props.deletedAt instanceof Date ? props.deletedAt : new Date(props.deletedAt)) : null,
+      props.userId ?? null,
       props.contractIds,
     );
   }
@@ -365,6 +370,18 @@ export class Colaborator extends BaseEntity {
 
   public get groupId(): number {
     return this._groupId;
+  }
+
+  public get userId(): string | null | undefined {
+    return this._userId;
+  }
+
+  public linkUser(userId: string): void {
+    this._userId = userId;
+  }
+
+  public unlinkUser(): void {
+    this._userId = null;
   }
 
   // Business methods
@@ -563,6 +580,7 @@ export class Colaborator extends BaseEntity {
       groupId: this._groupId,
       status: this._status,
       isActive: this.isActive(),
+      userId: this._userId ?? null,
       contractIds: this.contractIds,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,

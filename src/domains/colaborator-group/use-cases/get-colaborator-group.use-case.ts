@@ -17,7 +17,7 @@ export class GetColaboratorGroupByIdUseCase {
 export class GetAllColaboratorGroupsUseCase {
   constructor(private readonly colaboratorGroupRepository: ColaboratorGroupRepository) {}
 
-  async execute(): Promise<ColaboratorGroup[]> {
-    return this.colaboratorGroupRepository.findAll();
+  async execute(groupId?: number): Promise<ColaboratorGroup[]> {
+    return this.colaboratorGroupRepository.findAll(groupId);
   }
 }

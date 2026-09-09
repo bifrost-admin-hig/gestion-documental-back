@@ -1,0 +1,117 @@
+### Variables (configurar en entorno o editar aquí)
+@baseUrl = http://localhost:3000
+@token = Bearer <tu-token-aqui>
+@documentId = <uuid-del-documento>
+@signatureId = <uuid-de-la-firma>
+@tokenHash = <hash-del-token-de-firma>
+
+### ─── Iniciar proceso de firma ──────────────────────────────────────────────
+# POST /api/signatures/initiate
+# Permisos requeridos: signature:create
+# Envía el código OTP al correo del usuario autenticado
+
+POST {{baseUrl}}/api/signatures/initiate
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "documentId": "{{documentId}}"
+}
+
+###
+
+### Con tipo y método explícitos (simple + email por defecto)
+POST {{baseUrl}}/api/signatures/initiate
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "documentId": "{{documentId}}",
+  "signatureType": "simple",
+  "signatureMethod": "email"
+}
+
+###
+
+### ─── Validar código OTP ─────────────────────────────────────────────────────
+# POST /api/signatures/validate
+# Permisos requeridos: signature:update
+# El código es de 6 dígitos enviado por email
+
+POST {{baseUrl}}/api/signatures/validate
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "signatureId": "{{signatureId}}",
+  "code": "123456"
+}
+
+###
+
+### ─── Cancelar proceso de firma ─────────────────────────────────────────────
+# POST /api/signatures/cancel
+# Permisos requeridos: signature:update
+
+POST {{baseUrl}}/api/signatures/cancel
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "signatureId": "{{signatureId}}"
+}
+
+###
+
+### ─── Obtener firmas por documento ──────────────────────────────────────────
+# GET /api/signatures/document/:documentId
+# Permisos requeridos: signature:read
+
+GET {{baseUrl}}/api/signatures/document/{{documentId}}
+Authorization: {{token}}
+
+###
+
+### ─── Verificar firma por token hash (endpoint público) ─────────────────────
+# GET /api/signatures/verify/:tokenHash
+# Público — sin autenticación requerida (para escaneo de QR)
+
+GET {{baseUrl}}/api/signatures/verify/{{tokenHash}}
+
+###
+
+### ─── Casos de error ─────────────────────────────────────────────────────────
+
+### 422 — documentId inválido
+POST {{baseUrl}}/api/signatures/initiate
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "documentId": "no-es-uuid"
+}
+
+###
+
+### 422 — código OTP con formato incorrecto
+POST {{baseUrl}}/api/signatures/validate
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "signatureId": "{{signatureId}}",
+  "code": "abc"
+}
+
+###
+
+### 404 — firma inexistente
+POST {{baseUrl}}/api/signatures/cancel
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "signatureId": "00000000-0000-0000-0000-000000000000"
+}
+
+###

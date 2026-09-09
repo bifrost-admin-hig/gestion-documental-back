@@ -5,7 +5,7 @@ import { DateUtils } from '@shared/utils/date';
 export interface ContractResponseDto {
   id: string;
   rutSociedad: string;
-  nombreColaborador: string;
+  nombreColaborador?: string;
   startDate: string; // ISO date string
   endDate?: string; // ISO date string, optional
   contractType: ContractType;
@@ -22,6 +22,7 @@ export interface ContractResponseDto {
   dotacionVehiculos: number;
   descripcionServicio?: string;
   nombreProyecto?: string;
+  turnos?: string;
   jornadaTrabajo: JornadaTrabajo;
   status: ContractStatus;
   groupId: number;
@@ -55,6 +56,7 @@ export function toContractResponseDto(contract: Contract): ContractResponseDto {
     dotacionVehiculos: json.dotacionVehiculos ?? 0,
     descripcionServicio: json.descripcionServicio,
     nombreProyecto: json.nombreProyecto,
+    turnos: json.turnos,
     jornadaTrabajo: json.jornadaTrabajo as JornadaTrabajo,
     status: json.status as ContractStatus,
     groupId: json.groupId,

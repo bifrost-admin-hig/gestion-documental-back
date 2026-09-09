@@ -28,6 +28,12 @@ import { createFileShareAuthRoutes, createSharedFileRoutes } from '@presentation
 import { createCompanyRoutes } from '@presentation/routes/company.routes';
 import { createAreaRoutes } from '@presentation/routes/area.routes';
 import { createDivisionRoutes } from '@presentation/routes/division.routes';
+import { createDocumentTemplateRoutes } from '@presentation/routes/document-template.routes';
+import { createSignatureRoutes } from '@presentation/routes/signature.routes';
+import { createSignatureFlowRoutes } from '@presentation/routes/signature-flow.routes';
+import { createExternalParticipantRoutes } from '@presentation/routes/external-participant.routes';
+import { createEmailQueueRoutes } from '@presentation/routes/email-queue.routes';
+import { createLandingSettingsRoutes } from '@presentation/routes/landing-settings.routes';
 import { DependencyContainer } from './dependency-container';
 import { runInitialSeedsIfEmpty } from '@shared/infrastructure/database/seeds/initial-seeds';
 import { RouteError } from '@shared/domain/errors';
@@ -52,6 +58,12 @@ export class App {
     // Run initial seeds only if not in production
     if (process.env.NODE_ENV !== 'production') {
       await runInitialSeedsIfEmpty();
+    }
+
+    // Start email queue background processor
+    if (process.env.NODE_ENV !== 'test') {
+      this.dependencyContainer.getEmailQueueProcessor().start();
+      this.dependencyContainer.getSignatureFlowAutoCloseProcessor().start();
     }
 
     // Setup middleware
@@ -140,6 +152,7 @@ export class App {
           companies: '/api/companies',
           areas: '/api/areas',
           divisions: '/api/divisions',
+          landingSettings: '/api/landing-settings',
           files: '/api/files',
           auth: {
             login: '/api/auth/login',
@@ -171,6 +184,11 @@ export class App {
     const companyController = this.dependencyContainer.getCompanyController();
     const bulkTemplateController = this.dependencyContainer.getBulkTemplateController();
     const fileShareController = this.dependencyContainer.getFileShareController();
+    const documentTemplateController = this.dependencyContainer.getDocumentTemplateController();
+    const signatureController = this.dependencyContainer.getSignatureController();
+    const signatureFlowController = this.dependencyContainer.getSignatureFlowController();
+    const emailQueueController = this.dependencyContainer.getEmailQueueController();
+    const landingSettingsController = this.dependencyContainer.getLandingSettingsController();
 
     // Get use cases and repositories needed for middleware
     const checkUserCanReviewContractUseCase = this.dependencyContainer.getCheckUserCanReviewContractUseCase();
@@ -203,6 +221,15 @@ export class App {
     this.app.use('/api/files', createFileRoutes(fileController));
     this.app.use('/api/files', createFileShareAuthRoutes(fileShareController));
     this.app.use('/api/shared/files', createSharedFileRoutes(fileShareController));
+    this.app.use('/api/document-templates', createDocumentTemplateRoutes(documentTemplateController));
+    this.app.use('/api/signatures', createSignatureRoutes(signatureController));
+    this.app.use('/api/signature-flows', createSignatureFlowRoutes(signatureFlowController));
+
+    const externalParticipantController = this.dependencyContainer.getExternalParticipantController();
+    this.app.use('/api/external-access', createExternalParticipantRoutes(externalParticipantController));
+
+    this.app.use('/api/admin/email-queue', createEmailQueueRoutes(emailQueueController));
+    this.app.use('/api/landing-settings', createLandingSettingsRoutes(landingSettingsController));
 
     // Auth routes
     this.app.use('/api/auth', createAuthRoutes(authController));
@@ -231,6 +258,8 @@ export class App {
   }
 
   public async close(): Promise<void> {
+    this.dependencyContainer.getEmailQueueProcessor().stop();
+    this.dependencyContainer.getSignatureFlowAutoCloseProcessor().stop();
     if (AppDataSource.isInitialized) {
       await AppDataSource.destroy();
     }

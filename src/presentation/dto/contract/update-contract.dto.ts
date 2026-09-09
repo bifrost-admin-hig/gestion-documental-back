@@ -11,6 +11,7 @@ export interface UpdateContractDto {
   nombreMandante?: string;
   descripcionServicio?: string;
   nombreProyecto?: string;
+  turnos?: string;
   division?: string;
   area?: string;
   dotacionPersonal?: number;

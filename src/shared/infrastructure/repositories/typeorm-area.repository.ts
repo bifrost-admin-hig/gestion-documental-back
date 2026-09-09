@@ -13,8 +13,9 @@ export class TypeOrmAreaRepository implements AreaRepository {
     this.repository = ds.getRepository(AreaEntity);
   }
 
-  async findAll(): Promise<Area[]> {
+  async findAll(groupId?: number): Promise<Area[]> {
     const entities = await this.repository.find({
+      where: groupId ? { groupId } : undefined,
       relations: ['group'],
       order: { createdAt: 'DESC' },
     });

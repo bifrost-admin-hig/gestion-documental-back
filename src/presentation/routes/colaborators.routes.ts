@@ -85,6 +85,13 @@ export const createColaboratorRoutes = (colaboratorController: ColaboratorContro
     colaboratorController.updateColaboratorContracts,
   );
 
+  // PUT /api/colaborators/:id/user - Assign / unassign user (requires BOTH colaborator:update AND user:update)
+  router.put('/:id/user',
+    authorize('colaborator:update'),
+    authorize('user:update'),
+    colaboratorController.assignUser,
+  );
+
   // PUT /api/colaborators/:id - Update colaborator
   router.put('/:id',
     authorize('colaborator:update'),

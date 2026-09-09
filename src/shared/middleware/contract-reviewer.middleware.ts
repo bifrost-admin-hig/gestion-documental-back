@@ -30,6 +30,12 @@ export function createContractReviewerMiddleware(
 
       if (!contractId) throw new ValidationError('Contract ID is required', 'contractId');
 
+      // Usuarios con permiso global no requieren ser revisores activos del contrato
+      if (user.can('document:review:any')) {
+        req.auth.contractId = contractId;
+        return next();
+      }
+
       // Verificar si el usuario tiene permiso para revisar documentos
       if (!user.can('document:review')) throw new ForbiddenError('User can\'t review documents');
 

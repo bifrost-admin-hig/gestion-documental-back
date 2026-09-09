@@ -26,97 +26,131 @@ interface DBDocument extends DBDocumentModel {
 
 export class UpdateDocumentsStructure1769572000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.getTable('documents').then(async (table) => {
-      if (!table) throw new Error('Table documents not found');
+    let table = await queryRunner.getTable('documents');
+    if (!table) throw new Error('Table documents not found');
 
-      // 1. Agrega columna document_model_id a la tabla documents
-      if (!table?.columns.find((c) => c.name === 'document_model_id')) {
-        await queryRunner.addColumn('documents', new TableColumn({
-          name: 'document_model_id',
-          type: 'varchar',
-          length: '36',
-          isNullable: true, // Inicialmente nullable para permitir documentos sin modelos (aunque la req implique reemplazo)
-        }));
-      }
-      // 2. Buscamos todos los documentos y actualizamos su document_model_id
-      const documents = await queryRunner.manager.find<DBDocument>('documents');
-      for (const document of documents) {
-        // 2.1.1. Buscamos si hay alguna familia que pertenezca al contrato del documento
-        let family = await queryRunner.manager.findOne<DBFamily>('families', {
-          where: { contract_id: document.contract_id },
-        });
-        if (!family) {
-          // 2.1.2. Si no encontramos la familia, se crea una nueva
-          const inserted = await queryRunner.manager.insert<DBFamily>('families', {
-            id: randomUUID(),
-            contract_id: document.contract_id,
-            name: `Family for contract ${document.contract_id}`,
-            group_id: document.group_id,
-          });
-          family = inserted.identifiers[0] as DBFamily;
-        }
-        // 2.2.1. Buscamos un modelo de documento que tenga los mismos datos
-        let documentModel = await queryRunner.manager.createQueryBuilder<DBDocumentModel>('document_models', 'dm')
-          .where('dm.document_type_id = :document_type_id', { document_type_id: document.document_type_id })
-          .andWhere('dm.document_subtype_id = :document_subtype_id', { document_subtype_id: document.document_subtype_id })
-          .andWhere('dm.family_id = :family_id', { family_id: family.id })
-          .getOne();
-        if (!documentModel) {
-          // 2.2.2. Si no encontramos el modelo de documento, se crea uno nuevo
-          const inserted = await queryRunner.manager.insert<DBDocumentModel>('document_models', {
-            id: randomUUID(),
-            document_type_id: document.document_type_id,
-            document_subtype_id: document.document_subtype_id,
-            family_id: family.id,
-            required_expiration_date: document.required_expiration_date,
-            required_for_colaborator: document.required_for_colaborator,
-            required_for_contract: document.required_for_contract,
-          });
-          documentModel = inserted.identifiers[0] as DBDocumentModel;
-        }
-        if (documentModel.id) {
-          // 2.3. Actualizamos el document_model_id del documento con el modelo encontrado
-          await queryRunner.manager.update('documents', { id: document.id }, { document_model_id: documentModel.id });
-        } else {
-          // 2.4. Si no se pudo asignar un document_model_id, eliminamos el documento
-          await queryRunner.manager.delete('documents', { id: document.id });
-        }
-      }
+    // Si document_type_id ya no existe, la migración fue aplicada previamente → no-op
+    if (!table.columns.find((c) => c.name === 'document_type_id')) return;
 
-      // 3. Hacer que document_model_id no sea nullable
-      await queryRunner.changeColumn('documents', 'document_model_id', new TableColumn({
+    // 1. Agrega columna document_model_id si no existe
+    if (!table.columns.find((c) => c.name === 'document_model_id')) {
+      await queryRunner.addColumn('documents', new TableColumn({
         name: 'document_model_id',
         type: 'varchar',
         length: '36',
-        isNullable: false,
+        isNullable: true,
       }));
-      // 4. Añade la foreign key a la columna document_model_id
-      await queryRunner.createForeignKey('documents', new TableForeignKey({
-        columnNames: ['document_model_id'],
-        referencedColumnNames: ['id'],
-        referencedTableName: 'document_models',
-        onDelete: 'RESTRICT',
-      }));
-    });
+    }
 
-    await queryRunner.getTable('documents').then(async (table) => {
-      // 6. Remover las foreign keys antiguas primero
-      const foreignKeySubtype = table?.foreignKeys.find(fk => fk.columnNames.indexOf('document_subtype_id') !== -1);
-      if (foreignKeySubtype) {
-        await queryRunner.dropForeignKey('documents', foreignKeySubtype);
+    // 2. Migrar datos: asignar document_model_id a cada documento
+    const documents: DBDocument[] = await queryRunner.query(
+      `SELECT id, contract_id, group_id, document_type_id, document_subtype_id,
+              required_expiration_date, required_for_colaborator, required_for_contract,
+              document_model_id
+       FROM documents WHERE deleted_at IS NULL`,
+    );
+    for (const document of documents) {
+      // 2.1.1. Buscamos si hay alguna familia que pertenezca al contrato del documento
+      const familyRows: DBFamily[] = await queryRunner.query(
+        'SELECT id, contract_id, group_id, name FROM families WHERE contract_id = ? AND deleted_at IS NULL LIMIT 1',
+        [document.contract_id],
+      );
+      let family: DBFamily | undefined = familyRows[0];
+      if (!family) {
+        // 2.1.2. Si no encontramos la familia, se crea una nueva
+        const newFamilyId = randomUUID();
+        await queryRunner.query(
+          'INSERT INTO families (id, contract_id, name, group_id) VALUES (?, ?, ?, ?)',
+          [newFamilyId, document.contract_id, `Family for contract ${document.contract_id}`, document.group_id],
+        );
+        const inserted: DBFamily[] = await queryRunner.query(
+          'SELECT id, contract_id, group_id, name FROM families WHERE id = ?',
+          [newFamilyId],
+        );
+        family = inserted[0];
       }
-      const foreignKeyType = table?.foreignKeys.find(fk => fk.columnNames.indexOf('document_type_id') !== -1);
-      if (foreignKeyType) {
-        await queryRunner.dropForeignKey('documents', foreignKeyType);
+      // 2.2.1. Buscamos un modelo de documento que tenga los mismos datos
+      const modelRows: DBDocumentModel[] = await queryRunner.query(
+        `SELECT id, document_type_id, document_subtype_id, family_id,
+                required_expiration_date, required_for_colaborator, required_for_contract
+         FROM document_models
+         WHERE document_type_id = ? AND document_subtype_id = ? AND family_id = ?
+         LIMIT 1`,
+        [document.document_type_id, document.document_subtype_id, family!.id],
+      );
+      let documentModel: DBDocumentModel | undefined = modelRows[0];
+      if (!documentModel) {
+        // 2.2.2. Si no encontramos el modelo de documento, se crea uno nuevo
+        const newModelId = randomUUID();
+        await queryRunner.query(
+          `INSERT INTO document_models (id, document_type_id, document_subtype_id, family_id,
+                                       required_expiration_date, required_for_colaborator, required_for_contract)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newModelId,
+            document.document_type_id,
+            document.document_subtype_id,
+            family!.id,
+            document.required_expiration_date,
+            document.required_for_colaborator,
+            document.required_for_contract,
+          ],
+        );
+        const modelInserted: DBDocumentModel[] = await queryRunner.query(
+          'SELECT id FROM document_models WHERE id = ?',
+          [newModelId],
+        );
+        documentModel = modelInserted[0];
       }
-      await queryRunner.dropColumns('documents', [
-        'document_type_id',
-        'document_subtype_id',
-        'required_for_contract',
-        'required_for_colaborator',
-        'required_expiration_date',
-      ]);
-    });
+      if (documentModel?.id) {
+        // 2.3. Actualizamos el document_model_id del documento
+        await queryRunner.query(
+          'UPDATE documents SET document_model_id = ? WHERE id = ?',
+          [documentModel.id, document.id],
+        );
+      } else {
+        // 2.4. Si no se pudo asignar un document_model_id, eliminamos el documento
+        await queryRunner.query('DELETE FROM documents WHERE id = ?', [document.id]);
+      }
+    }
+
+    // 3. Hacer que document_model_id no sea nullable
+    await queryRunner.changeColumn('documents', 'document_model_id', new TableColumn({
+      name: 'document_model_id',
+      type: 'varchar',
+      length: '36',
+      isNullable: false,
+    }));
+
+    // 4. Añade la foreign key a document_model_id
+    await queryRunner.createForeignKey('documents', new TableForeignKey({
+      columnNames: ['document_model_id'],
+      referencedColumnNames: ['id'],
+      referencedTableName: 'document_models',
+      onDelete: 'RESTRICT',
+    }));
+
+    // Recargar tabla para obtener FKs actualizadas
+    table = await queryRunner.getTable('documents');
+
+    // 5. Remover las foreign keys antiguas
+    const foreignKeySubtype = table?.foreignKeys.find(fk => fk.columnNames.indexOf('document_subtype_id') !== -1);
+    if (foreignKeySubtype) {
+      await queryRunner.dropForeignKey('documents', foreignKeySubtype);
+    }
+    const foreignKeyType = table?.foreignKeys.find(fk => fk.columnNames.indexOf('document_type_id') !== -1);
+    if (foreignKeyType) {
+      await queryRunner.dropForeignKey('documents', foreignKeyType);
+    }
+
+    // 6. Eliminar columnas antiguas
+    await queryRunner.dropColumns('documents', [
+      'document_type_id',
+      'document_subtype_id',
+      'required_for_contract',
+      'required_for_colaborator',
+      'required_expiration_date',
+    ]);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -172,19 +206,32 @@ export class UpdateDocumentsStructure1769572000000 implements MigrationInterface
     );
 
     // 3. Buscamos todos los documentos y actualizamos sus propiedades usando el document_model_id
-    const documents = await queryRunner.manager.find('documents') as DBDocument[];
+    const documents: DBDocument[] = await queryRunner.query(
+      'SELECT id, document_model_id FROM documents WHERE deleted_at IS NULL',
+    );
     for (const document of documents) {
-      const documentModel = await queryRunner.manager.findOne<DBDocumentModel>('document_models', {
-        where: { id: document.document_model_id! },
-      });
+      const modelRows: DBDocumentModel[] = await queryRunner.query(
+        `SELECT id, document_type_id, document_subtype_id,
+                required_for_contract, required_for_colaborator, required_expiration_date
+         FROM document_models WHERE id = ? LIMIT 1`,
+        [document.document_model_id],
+      );
+      const documentModel = modelRows[0];
       if (documentModel) {
-        await queryRunner.manager.update('documents', { id: document.id }, {
-          document_type_id: documentModel.document_type_id,
-          document_subtype_id: documentModel.document_subtype_id,
-          required_for_contract: documentModel.required_for_contract,
-          required_for_colaborator: documentModel.required_for_colaborator,
-          required_expiration_date: documentModel.required_expiration_date,
-        });
+        await queryRunner.query(
+          `UPDATE documents
+           SET document_type_id = ?, document_subtype_id = ?,
+               required_for_contract = ?, required_for_colaborator = ?, required_expiration_date = ?
+           WHERE id = ?`,
+          [
+            documentModel.document_type_id,
+            documentModel.document_subtype_id,
+            documentModel.required_for_contract,
+            documentModel.required_for_colaborator,
+            documentModel.required_expiration_date,
+            document.id,
+          ],
+        );
       }
     }
 

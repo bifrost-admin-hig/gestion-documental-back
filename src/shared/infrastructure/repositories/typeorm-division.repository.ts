@@ -13,8 +13,9 @@ export class TypeOrmDivisionRepository implements DivisionRepository {
     this.repository = ds.getRepository(DivisionEntity);
   }
 
-  async findAll(): Promise<Division[]> {
+  async findAll(groupId?: number): Promise<Division[]> {
     const entities = await this.repository.find({
+      where: groupId ? { groupId } : undefined,
       relations: ['group', 'area'],
       order: { createdAt: 'DESC' },
     });

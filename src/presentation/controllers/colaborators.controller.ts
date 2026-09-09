@@ -11,6 +11,7 @@ import { UpdateColaboratorContractsUseCase } from '@domains/colaborators/use-cas
 import { GetContractsByColaboratorUseCase } from '@domains/contract/use-cases/get-contracts-by-colaborator.use-case';
 import { toContractResponseDto } from '@presentation/dto/contract/contract-response.dto';
 import { ValidationError } from '@shared/domain/errors';
+import { LinkUserToColaboratorUseCase } from '@domains/colaborators/use-cases/link-user-to-colaborator.use-case';
 
 export class ColaboratorController {
   constructor(
@@ -21,6 +22,7 @@ export class ColaboratorController {
     private readonly getColaboratorGroupsUseCase: GetColaboratorGroupsUseCase,
     private readonly updateColaboratorContractsUseCase: UpdateColaboratorContractsUseCase,
     private readonly getContractsByColaboratorUseCase: GetContractsByColaboratorUseCase,
+    private readonly linkUserToColaboratorUseCase: LinkUserToColaboratorUseCase,
   ) {}
 
   public createColaborator = asyncHandler(async (req: Request, res: Response) => {
@@ -208,6 +210,17 @@ export class ColaboratorController {
     res.status(200).json({
       success: true,
       message: 'Colaborator deleted successfully',
+    });
+  });
+
+  public assignUser = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+    const colaborator = await this.linkUserToColaboratorUseCase.execute(id, userId ?? null);
+    res.status(200).json({
+      success: true,
+      data: toColaboratorResponseDto(colaborator),
+      message: userId ? 'User assigned to colaborator successfully' : 'User unlinked from colaborator successfully',
     });
   });
 }

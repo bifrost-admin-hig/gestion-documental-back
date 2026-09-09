@@ -1,0 +1,87 @@
+# Revisión de Seguridad - Criterios Críticos
+
+## Patrón Detectado: JWT Secret Fallback Inseguro
+
+### ⚠️ Vulnerabilidad Crítica a Bloquear
+
+**Pattern:** `process.env.JWT_SECRET || 'hardcoded-fallback'`
+
+Buscar en:
+- `auth.controller.ts` - métodos login(), refresh()
+- `auth.middleware.ts` - función de verificación
+- Cualquier `jwt.sign()` o `jwt.verify()`
+
+### ✅ Patrón Correcto
+
+1. **Inyección en DependencyContainer:**
+```typescript
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+  throw new ServerError('JWT_SECRET is not configured');
+}
+```
+
+2. **Paso a controladores/middleware:**
+```typescript
+// Constructor recibe jwtSecret inyectado
+constructor(private readonly jwtSecret: string) {}
+
+// Uso directo sin fallback
+jwt.sign({...}, this.jwtSecret)
+```
+
+### 🔍 Checklist por PR
+
+- [ ] `jwt.sign()` **sin** fallback (|| fallback = RED FLAG)
+- [ ] `jwt.verify()` **sin** fallback
+- [ ] JWT_SECRET validado en DependencyContainer init
+- [ ] Controllers reciben jwtSecret por inyección
+- [ ] Middleware recibe jwtSecret por inyección
+- [ ] Sin referencias a 'supersecretjwtkey' o similares
+
+### 📋 Decisión de Bloqueo
+
+**BLOQUEAR si:**
+- Fallback a contraseña hardcodeada detectado
+- Múltiples locaciones con `jwt.*() || 'fallback'`
+- No hay inyección de dependencia desde container
+
+**PERMITIR si:**
+- Todos los `jwt.*()` usan valor inyectado
+- DependencyContainer valida JWT_SECRET al inicio
+- Sin constantes hardcodeadas de secrets
+
+### 🎯 Scope del Proyecto
+
+**Repo:** bifrost-admin-hig/gestion-documental-back
+
+**Rama feature → develop:** PR debe pasar seguridad antes de merge
+
+**Vulnerabilidad anterior:** PR #88 permitió fallback JWT que bypasea auth completamente
+
+---
+
+## Ejecución
+
+Usar para revisar PRs:
+```bash
+# Revisar rama actual
+claude-code /security-review
+
+# O análisis manual
+grep -r "process.env.JWT_SECRET || " src/
+grep -r "jwt.sign.*||" src/
+grep -r "jwt.verify.*||" src/
+```
+
+---
+
+## Historia
+
+**PR #88 (feature/email-sender-and-users-updates):**
+- Detectó JWT fallback en 3 ubicaciones
+- Severidad: CRÍTICA (auth bypass)
+- Fix: Inyectar jwtSecret desde DependencyContainer
+- Bloqueado hasta corrección
+
+Prevenir recurrencia con este checklist.

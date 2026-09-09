@@ -66,10 +66,8 @@ export class TypeOrmRoleRepository implements RoleRepository {
       entity.description = props.description;
     }
 
-    if (props.permissions) {
+    if (props.permissions !== undefined) {
       entity.permissions = await this.permissionRepository.findBy({ id: In(props.permissions.map(p => p.id!)) });
-    } else {
-      entity.permissions = [];
     }
 
     const savedEntity = await this.repository.save(entity);

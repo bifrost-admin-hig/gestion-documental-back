@@ -34,7 +34,8 @@ export class AreaController {
   });
 
   public listAreas = asyncHandler(async (req: Request, res: Response) => {
-    const areas = await this.listAreasUseCase.execute();
+    const groupId = req.auth?.groupId;
+    const areas = await this.listAreasUseCase.execute(groupId);
     res.status(200).json({
       success: true,
       data: areas.map((area) => area.toJSON()),

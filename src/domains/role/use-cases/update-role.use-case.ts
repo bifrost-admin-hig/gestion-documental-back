@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError, ForbiddenError } from '@shared/domain/errors';
 import { Role, UpdateRoleProps } from '@domains/role/entities/role.entity';
 import { RoleRepository } from '@domains/role/repositories/role.repository';
+import { UserRepository } from '@domains/user/repositories/user.repository';
 import { User } from '@domains/user/entities/user.entity';
 
 export class UpdateRoleUseCase {
@@ -32,12 +33,22 @@ export class UpdateRoleUseCase {
 }
 
 export class DeleteRoleUseCase {
-  constructor(private readonly roleRepository: RoleRepository) {}
+  constructor(
+    private readonly roleRepository: RoleRepository,
+    private readonly userRepository: UserRepository,
+  ) {}
 
   async execute(id: number): Promise<void> {
     const role = await this.roleRepository.findById(id);
     if (!role) {
       throw new NotFoundError(`Role with ID ${id} not found`);
+    }
+
+    const usersWithRole = await this.userRepository.findByRoleId(id);
+    if (usersWithRole.length > 0) {
+      throw new ConflictError(
+        `Cannot delete role "${role.name}" because it is assigned to ${usersWithRole.length} user(s)`,
+      );
     }
 
     await this.roleRepository.delete(id);

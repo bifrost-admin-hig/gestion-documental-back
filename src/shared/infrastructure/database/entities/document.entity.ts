@@ -10,17 +10,24 @@ import {
   JoinColumn,
   JoinTable,
   Index,
+  type Relation,
 } from 'typeorm';
 import { DocumentModelEntity } from './document-model.entity';
 import { ColaboratorEntity } from './colaborators.entity';
 import { ContractEntity } from './contract.entity';
 import { UserEntity } from './user.entity';
+import { DocumentTemplateEntity } from './document-template.entity';
+import { SignatureFlowEntity } from './signature-flow.entity';
+import { AreaEntity } from './area.entity';
 
 @Entity('documents')
 @Index('IDX_documents_status', ['status'])
 @Index('IDX_documents_deleted_at', ['deletedAt'])
 @Index('IDX_documents_group_id', ['groupId'])
 @Index('IDX_documents_contract_id', ['contractId'])
+@Index('IDX_documents_signature_flow_id', ['signatureFlowId'])
+@Index('IDX_documents_is_superseded', ['isSuperseded'])
+@Index('IDX_documents_group_id_code', ['groupId', 'code'], { unique: true })
 export class DocumentEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -65,6 +72,45 @@ export class DocumentEntity {
   @Column({ type: 'varchar', length: 50, default: 'draft' })
   status!: string;
 
+  @Column({ name: 'signature_status', type: 'varchar', length: 50, nullable: true })
+  signatureStatus?: string;
+
+  @Column({ name: 'pre_flow_status', type: 'varchar', length: 50, nullable: true })
+  preFlowStatus?: string | null;
+
+  @Column({ name: 'signature_flow_id', type: 'varchar', length: 36, nullable: true })
+  signatureFlowId?: string;
+
+  @ManyToOne(() => SignatureFlowEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'signature_flow_id' })
+  signatureFlow?: SignatureFlowEntity;
+
+  @Column({ name: 'previous_version_id', type: 'varchar', length: 36, nullable: true })
+  previousVersionId?: string;
+
+  @Column({ name: 'is_superseded', type: 'boolean', default: false })
+  isSuperseded!: boolean;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  code?: string;
+
+  @Column({ name: 'review_date', type: 'date', nullable: true })
+  reviewDate?: Date;
+
+  @Column({ name: 'responsible_colaborator_id', type: 'varchar', length: 36, nullable: true })
+  responsibleColaboratorId?: string;
+
+  @ManyToOne(() => ColaboratorEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'responsible_colaborator_id' })
+  responsibleColaborator?: Relation<ColaboratorEntity>;
+
+  @Column({ name: 'area_id', type: 'varchar', length: 36, nullable: true })
+  areaId?: string;
+
+  @ManyToOne(() => AreaEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'area_id' })
+  area?: AreaEntity;
+
   @Column({ name: 'group_id', type: 'integer' })
   groupId!: number;
 
@@ -77,6 +123,13 @@ export class DocumentEntity {
   @ManyToOne(() => UserEntity, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'created_by' })
   creator?: UserEntity;
+
+  @Column({ name: 'template_id', type: 'varchar', length: 36, nullable: true })
+  templateId?: string;
+
+  @ManyToOne(() => DocumentTemplateEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'template_id' })
+  template?: DocumentTemplateEntity;
 
   @Column({ type: 'text', nullable: true })
   comment?: string;

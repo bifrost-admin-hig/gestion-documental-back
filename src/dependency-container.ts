@@ -21,6 +21,8 @@ import { GetUserByIdUseCase, GetAllUsersUseCase } from '@domains/user/use-cases/
 import { UpdateUserUseCase, DeleteUserUseCase } from '@domains/user/use-cases/update-user.use-case';
 import { AssignRoleToUserUseCase } from '@domains/user/use-cases/assign-role-to-user.use-case';
 import { LoginUserUseCase } from '@domains/user/use-cases/login-user.use-case';
+import { ChangePasswordUseCase } from '@domains/user/use-cases/change-password.use-case';
+import { ServerError } from '@shared/domain/errors';
 
 // DocumentType domain
 import { CreateDocumentTypeUseCase } from '@domains/document-type/use-cases/create-document-type.use-case';
@@ -54,8 +56,10 @@ import {
   GetExpiringDocumentsUseCase,
 } from '@domains/document/use-cases/get-document.use-case';
 import { UpdateDocumentUseCase, DeleteDocumentUseCase } from '@domains/document/use-cases/update-document.use-case';
+import { DocumentVersioningService } from '@domains/document/services/document-versioning.service';
 import { SendToReviewDocumentUseCase } from '@domains/document/use-cases/send-to-review-document.use-case';
 import { ApproveDocumentUseCase } from '@domains/document/use-cases/approve-document.use-case';
+import { DirectApproveDocumentUseCase } from '@domains/document/use-cases/direct-approve-document.use-case';
 import { RejectDocumentUseCase } from '@domains/document/use-cases/reject-document.use-case';
 import { RejectDocumentWithCommentsUseCase } from '@domains/document/use-cases/reject-document-with-comments.use-case';
 import { CreateDocumentHistoryUseCase as _CreateDocumentHistoryUseCase } from '@domains/document/use-cases/create-document-history.use-case';
@@ -96,6 +100,7 @@ import { UpdateReviewerUseCase } from '@domains/contract/use-cases/update-review
 import { AddColaboratorToContractUseCase } from '@domains/contract/use-cases/add-colaborator-to-contract.use-case';
 import { RemoveColaboratorFromContractUseCase } from '@domains/contract/use-cases/remove-colaborator-from-contract.use-case';
 import { GetContractColaboratorsUseCase } from '@domains/contract/use-cases/get-contract-colaborators.use-case';
+import { GetContractDocumentStructureUseCase } from '@domains/contract/use-cases/get-contract-document-structure.use-case';
 
 // Colaborator domain
 import { CreateColaboratorUseCase } from '@domains/colaborators/use-cases/create-colaborator.use-case';
@@ -104,6 +109,7 @@ import { UpdateColaboratorUseCase, DeleteColaboratorUseCase } from '@domains/col
 import { GetColaboratorGroupsUseCase } from '@domains/colaborators/use-cases/get-colaborator-groups.use-case';
 import { UpdateColaboratorContractsUseCase } from '@domains/colaborators/use-cases/update-colaborator-contracts.use-case';
 import { GetContractsByColaboratorUseCase } from '@domains/contract/use-cases/get-contracts-by-colaborator.use-case';
+import { LinkUserToColaboratorUseCase } from '@domains/colaborators/use-cases/link-user-to-colaborator.use-case';
 
 // Permission domain
 import { FindAllPermissionsUseCase, FindPermissionByIdUseCase } from '@domains/permission/use-cases/find-permission.use-case';
@@ -155,6 +161,11 @@ import { ListAreasUseCase } from '@domains/area/use-cases/list-areas.use-case';
 import { UpdateAreaUseCase } from '@domains/area/use-cases/update-area.use-case';
 import { DeleteAreaUseCase } from '@domains/area/use-cases/delete-area.use-case';
 
+// Landing settings domain
+import { GetLandingSettingsUseCase } from '@domains/landing-settings/use-cases/get-landing-settings.use-case';
+import { UpdateLandingSettingsUseCase } from '@domains/landing-settings/use-cases/update-landing-settings.use-case';
+import { SubmitLandingContactUseCase } from '@domains/landing-settings/use-cases/submit-landing-contact.use-case';
+
 // Division domain
 import { CreateDivisionUseCase } from '@domains/division/use-cases/create-division.use-case';
 import { GetDivisionUseCase } from '@domains/division/use-cases/get-division.use-case';
@@ -166,6 +177,7 @@ import { TypeOrmFamilyRepository } from '@shared/infrastructure/repositories/typ
 import { TypeOrmDocumentModelRepository } from '@shared/infrastructure/repositories/typeorm-document-model.repository';
 import { TypeOrmGroupRepository } from '@shared/infrastructure/repositories/typeorm-group.repository';
 import { TypeOrmAreaRepository } from '@shared/infrastructure/repositories/typeorm-area.repository';
+import { TypeOrmLandingSettingsRepository } from '@shared/infrastructure/repositories/typeorm-landing-settings.repository';
 import { TypeOrmDivisionRepository } from '@shared/infrastructure/repositories/typeorm-division.repository';
 // Repositories
 import { TypeOrmUserRepository } from '@shared/infrastructure/repositories/typeorm-user.repository';
@@ -175,6 +187,7 @@ import { TypeOrmDocumentTypeRepository } from '@shared/infrastructure/repositori
 import { TypeOrmDocumentSubtypeRepository } from '@shared/infrastructure/repositories/typeorm-document-subtype.repository';
 import { TypeOrmDocumentRepository } from '@shared/infrastructure/repositories/typeorm-document.repository';
 import { TypeOrmDocumentHistoryRepository } from '@shared/infrastructure/repositories/typeorm-document-history.repository';
+import { TypeOrmDocumentFieldValueRepository } from '@shared/infrastructure/repositories/typeorm-document-field-value.repository';
 import { TypeOrmCompanyRepository } from '@shared/infrastructure/repositories/typeorm-company.repository';
 
 import { TypeOrmPermissionRepository } from '@shared/infrastructure/repositories/typeorm-permission.repository';
@@ -187,6 +200,7 @@ import { AuthController } from '@presentation/controllers/auth.controller';
 import { FileController } from '@presentation/controllers/file.controller';
 import { DocumentHistoryController } from '@presentation/controllers/document-history.controller';
 import { AssignDocumentsToGroupUseCase } from '@domains/document/use-cases/assign-documents-to-group.use-case';
+import { DownloadDocumentsZipUseCase } from '@domains/document/use-cases/download-documents-zip.use-case';
 
 // Group domain
 import { CreateGroupUseCase, GetAllGroupsUseCase } from '@domains/group/use-cases/create-group.use-case';
@@ -207,6 +221,90 @@ import { GetFileByShareTokenUseCase } from '@domains/file-share/use-cases/get-fi
 import { TypeOrmFileShareRepository } from '@shared/infrastructure/repositories/typeorm-file-share.repository';
 import { FileShareController } from '@presentation/controllers/file-share.controller';
 
+// Email
+import { NodemailerEmailService } from '@shared/infrastructure/email/nodemailer-email.service';
+import { EmailService } from '@shared/infrastructure/email/email-service.interface';
+import { EmailQueueService } from '@shared/infrastructure/email/email-queue.service';
+import { EmailQueueProcessor } from '@shared/infrastructure/email/email-queue.processor';
+import { SignatureFlowAutoCloseProcessor } from '@shared/infrastructure/signature-flow/signature-flow-auto-close.processor';
+
+// Signature domain
+import { TypeOrmSignatureRepository } from '@shared/infrastructure/repositories/typeorm-signature.repository';
+import { TypeOrmSignatureVerificationCodeRepository } from '@shared/infrastructure/repositories/typeorm-signature-verification-code.repository';
+import { TypeOrmSignatureCodeNotificationRepository } from '@shared/infrastructure/repositories/typeorm-signature-code-notification.repository';
+import { TypeOrmUserSignatureRepository } from '@shared/infrastructure/repositories/typeorm-user-signature.repository';
+import { SignatureCryptoService } from '@shared/security/signature-crypto.service';
+import { SignaturePdfStampService } from '@shared/infrastructure/pdf/signature-pdf-stamp.service';
+import { InitiateSignatureUseCase } from '@domains/signature/use-cases/initiate-signature.use-case';
+import { ValidateSignatureCodeUseCase } from '@domains/signature/use-cases/validate-signature-code.use-case';
+import { CancelSignatureUseCase } from '@domains/signature/use-cases/cancel-signature.use-case';
+import { GetSignatureByDocumentUseCase, GetSignatureByTokenHashUseCase } from '@domains/signature/use-cases/get-signature.use-case';
+import { VerifyDocumentSignatureUseCase } from '@domains/signature/use-cases/verify-document-signature.use-case';
+import { GetSignatureSmsPhoneUseCase } from '@domains/signature/use-cases/get-signature-sms-phone.use-case';
+import { GetSavedSignaturePreviewUseCase } from '@domains/signature/use-cases/get-saved-signature-preview.use-case';
+import { GetPublicDocumentVerificationUseCase } from '@domains/signature-flow/use-cases/get-public-document-verification.use-case';
+import { SignatureController } from '@presentation/controllers/signature.controller';
+
+// SignatureFlow domain
+import { TypeOrmSignatureFlowRepository } from '@shared/infrastructure/repositories/typeorm-signature-flow.repository';
+import { TypeOrmSignatureFlowParticipantRepository } from '@shared/infrastructure/repositories/typeorm-signature-flow-participant.repository';
+import { TypeOrmInAppNotificationRepository } from '@shared/infrastructure/repositories/typeorm-in-app-notification.repository';
+import { TypeOrmExternalParticipantTokenRepository } from '@shared/infrastructure/repositories/typeorm-external-participant-token.repository';
+import { TypeOrmSignatureFlowNotificationRepository } from '@shared/infrastructure/repositories/typeorm-signature-flow-notification.repository';
+import { SignatureFlowNotificationService } from '@domains/signature-flow/services/signature-flow-notification.service';
+import { CreateSignatureFlowUseCase } from '@domains/signature-flow/use-cases/create-signature-flow.use-case';
+import { ResendSignatureFlowNotificationUseCase } from '@domains/signature-flow/use-cases/resend-signature-flow-notification.use-case';
+import { GetSignatureFlowTrackingByDocumentUseCase } from '@domains/signature-flow/use-cases/get-signature-flow-tracking.use-case';
+import { SkipSignerUseCase, CloseSignatureFlowUseCase, ReopenSignatureFlowUseCase, AutoRejectValidatorUseCase } from '@domains/signature-flow/use-cases/close-signature-flow.use-case';
+import {
+  GetExternalParticipantAccessUseCase,
+  SubmitExternalParticipantActionUseCase,
+  RequestExternalSignerOtpUseCase,
+  ValidateExternalSignerOtpUseCase,
+  GetExternalSignerSavedSignatureUseCase,
+} from '@domains/signature-flow/use-cases/external-participant-access.use-case';
+import { ExternalParticipantController } from '@presentation/controllers/external-participant.controller';
+import {
+  GetSignatureFlowByIdUseCase,
+  GetSignatureFlowsByDocumentIdUseCase,
+  GetSignatureFlowParticipantsByFlowIdUseCase,
+  GetMyPendingSignatureTasksUseCase,
+  GetPendingSignatureDocumentsReportUseCase,
+  GetSignatureProcessTimeReportUseCase,
+  GetResendableParticipantsUseCase,
+} from '@domains/signature-flow/use-cases/get-signature-flow.use-case';
+import {
+  UpdateSignatureFlowUseCase,
+  AddParticipantToFlowUseCase,
+  RemoveParticipantFromFlowUseCase,
+  DeleteSignatureFlowUseCase,
+} from '@domains/signature-flow/use-cases/update-signature-flow.use-case';
+import { ProcessFlowParticipantActionUseCase } from '@domains/signature-flow/use-cases/progress-signature-flow.use-case';
+import { SignatureFlowController } from '@presentation/controllers/signature-flow.controller';
+
+// User extra use cases
+import { SetPasswordUseCase } from '@domains/user/use-cases/set-password.use-case';
+import { SendActivationEmailUseCase } from '@domains/user/use-cases/send-activation-email.use-case';
+import { SendPasswordResetEmailUseCase } from '@domains/user/use-cases/send-password-reset-email.use-case';
+import { ResetPasswordUseCase } from '@domains/user/use-cases/reset-password.use-case';
+
+// DocumentTemplate domain
+import { CreateDocumentTemplateUseCase } from '@domains/document-template/use-cases/create-document-template.use-case';
+import {
+  GetDocumentTemplateByIdUseCase,
+  GetAllDocumentTemplatesUseCase,
+  GetDocumentTemplateVersionsUseCase,
+  GetNextDocumentTemplateCodeUseCase,
+} from '@domains/document-template/use-cases/get-document-template.use-case';
+import {
+  CreateNewDocumentTemplateVersionUseCase,
+  DeleteDocumentTemplateUseCase,
+} from '@domains/document-template/use-cases/update-document-template.use-case';
+import { TypeOrmDocumentTemplateRepository } from '@shared/infrastructure/repositories/typeorm-document-template.repository';
+import { DocumentTemplateController } from '@presentation/controllers/document-template.controller';
+import { EmailQueueController } from '@presentation/controllers/email-queue.controller';
+import { LandingSettingsController } from '@presentation/controllers/landing-settings.controller';
+
 export class DependencyContainer {
   // Repositories
   private userRepository!: TypeOrmUserRepository;
@@ -217,6 +315,7 @@ export class DependencyContainer {
 
   private documentRepository!: TypeOrmDocumentRepository;
   private documentHistoryRepository!: TypeOrmDocumentHistoryRepository;
+  private documentFieldValueRepository!: TypeOrmDocumentFieldValueRepository;
   private permissionRepository!: TypeOrmPermissionRepository;
   private roleRepository!: TypeOrmRoleRepository;
   private contractReviewerRepository!: TypeOrmContractReviewerRepository;
@@ -227,13 +326,33 @@ export class DependencyContainer {
   private groupRepository!: TypeOrmGroupRepository;
   private companyRepository!: TypeOrmCompanyRepository;
   private areaRepository!: TypeOrmAreaRepository;
+  private landingSettingsRepository!: TypeOrmLandingSettingsRepository;
   private divisionRepository!: TypeOrmDivisionRepository;
   private bulkUploadTemplateRepository!: TypeOrmBulkUploadTemplateRepository;
   private fileShareRepository!: TypeOrmFileShareRepository;
+  private documentTemplateRepository!: TypeOrmDocumentTemplateRepository;
+  private signatureRepository!: TypeOrmSignatureRepository;
+  private signatureVerificationCodeRepository!: TypeOrmSignatureVerificationCodeRepository;
+  private signatureCodeNotificationRepository!: TypeOrmSignatureCodeNotificationRepository;
+  private userSignatureRepository!: TypeOrmUserSignatureRepository;
+  private signatureFlowRepository!: TypeOrmSignatureFlowRepository;
+  private signatureFlowParticipantRepository!: TypeOrmSignatureFlowParticipantRepository;
+  private inAppNotificationRepository!: TypeOrmInAppNotificationRepository;
+  private externalParticipantTokenRepository!: TypeOrmExternalParticipantTokenRepository;
+  private signatureFlowNotificationRepository!: TypeOrmSignatureFlowNotificationRepository;
 
   // Use Cases - BulkTemplate
   private manageBulkTemplateUseCase!: ManageBulkTemplateUseCase;
   private bulkLoadColaboratorsUseCase!: BulkLoadColaboratorsUseCase;
+
+  // Use Cases - DocumentTemplate
+  private createDocumentTemplateUseCase!: CreateDocumentTemplateUseCase;
+  private getDocumentTemplateByIdUseCase!: GetDocumentTemplateByIdUseCase;
+  private getAllDocumentTemplatesUseCase!: GetAllDocumentTemplatesUseCase;
+  private getDocumentTemplateVersionsUseCase!: GetDocumentTemplateVersionsUseCase;
+  private getNextDocumentTemplateCodeUseCase!: GetNextDocumentTemplateCodeUseCase;
+  private createNewDocumentTemplateVersionUseCase!: CreateNewDocumentTemplateVersionUseCase;
+  private deleteDocumentTemplateUseCase!: DeleteDocumentTemplateUseCase;
 
   // Use Cases - User
   private createUserUseCase!: CreateUserUseCase;
@@ -243,6 +362,7 @@ export class DependencyContainer {
   private deleteUserUseCase!: DeleteUserUseCase;
   private assignRoleToUserUseCase!: AssignRoleToUserUseCase;
   private loginUserUseCase!: LoginUserUseCase;
+  private changePasswordUseCase!: ChangePasswordUseCase;
 
   // Use Cases - DocumentType
   private createDocumentTypeUseCase!: CreateDocumentTypeUseCase;
@@ -276,11 +396,13 @@ export class DependencyContainer {
   private deleteDocumentUseCase!: DeleteDocumentUseCase;
   private sendToReviewDocumentUseCase!: SendToReviewDocumentUseCase;
   private approveDocumentUseCase!: ApproveDocumentUseCase;
+  private directApproveDocumentUseCase!: DirectApproveDocumentUseCase;
   private rejectDocumentUseCase!: RejectDocumentUseCase;
   private rejectDocumentWithCommentsUseCase!: RejectDocumentWithCommentsUseCase;
   private getDocumentHistoryUseCase!: GetDocumentHistoryUseCase;
   private getDashboardMetricsUseCase!: GetDashboardMetricsUseCase;
   private assignDocumentsToGroupUseCase!: AssignDocumentsToGroupUseCase;
+  private downloadDocumentsZipUseCase!: DownloadDocumentsZipUseCase;
 
 
   // Use Cases - Contract
@@ -313,6 +435,7 @@ export class DependencyContainer {
   private addColaboratorToContractUseCase!: AddColaboratorToContractUseCase;
   private removeColaboratorFromContractUseCase!: RemoveColaboratorFromContractUseCase;
   private getContractColaboratorsUseCase!: GetContractColaboratorsUseCase;
+  private getContractDocumentStructureUseCase!: GetContractDocumentStructureUseCase;
 
   // Use Cases - Colaborator
   private createColaboratorUseCase!: CreateColaboratorUseCase;
@@ -322,6 +445,7 @@ export class DependencyContainer {
   private getColaboratorGroupsUseCase!: GetColaboratorGroupsUseCase;
   private updateColaboratorContractsUseCase!: UpdateColaboratorContractsUseCase;
   private getContractsByColaboratorUseCase!: GetContractsByColaboratorUseCase;
+  private linkUserToColaboratorUseCase!: LinkUserToColaboratorUseCase;
 
   // Use Cases - Permission
   private savePermissionUseCase!: SavePermissionUseCase;
@@ -390,6 +514,11 @@ export class DependencyContainer {
   private updateAreaUseCase!: UpdateAreaUseCase;
   private deleteAreaUseCase!: DeleteAreaUseCase;
 
+  // Use Cases - Landing settings
+  private getLandingSettingsUseCase!: GetLandingSettingsUseCase;
+  private updateLandingSettingsUseCase!: UpdateLandingSettingsUseCase;
+  private submitLandingContactUseCase!: SubmitLandingContactUseCase;
+
   // Use Cases - Division
   private createDivisionUseCase!: CreateDivisionUseCase;
   private getDivisionUseCase!: GetDivisionUseCase;
@@ -415,14 +544,70 @@ export class DependencyContainer {
   private authController!: AuthController;
   private companyController!: CompanyController;
   private areaController!: AreaController;
+  private landingSettingsController!: LandingSettingsController;
   private divisionController!: DivisionController;
   private fileController!: FileController;
   private bulkTemplateController!: BulkTemplateController;
   private fileShareController!: FileShareController;
+  private documentTemplateController!: DocumentTemplateController;
+  private signatureController!: SignatureController;
+  private signatureFlowController!: SignatureFlowController;
+  private externalParticipantController!: ExternalParticipantController;
+  private emailQueueController!: EmailQueueController;
+
+  // Services - Signature
+  private signatureCryptoService!: SignatureCryptoService;
+  private signaturePdfStampService!: SignaturePdfStampService;
+  private documentVersioningService!: DocumentVersioningService;
+  private signatureFlowNotificationService!: SignatureFlowNotificationService;
+
+  // Use Cases - Signature
+  private initiateSignatureUseCase!: InitiateSignatureUseCase;
+  private validateSignatureCodeUseCase!: ValidateSignatureCodeUseCase;
+  private cancelSignatureUseCase!: CancelSignatureUseCase;
+  private getSignatureByDocumentUseCase!: GetSignatureByDocumentUseCase;
+  private getSignatureByTokenHashUseCase!: GetSignatureByTokenHashUseCase;
+  private verifyDocumentSignatureUseCase!: VerifyDocumentSignatureUseCase;
+  private getSignatureSmsPhoneUseCase!: GetSignatureSmsPhoneUseCase;
+  private getPublicDocumentVerificationUseCase!: GetPublicDocumentVerificationUseCase;
+  private getSavedSignaturePreviewUseCase!: GetSavedSignaturePreviewUseCase;
+
+  // Use Cases - SignatureFlow
+  private createSignatureFlowUseCase!: CreateSignatureFlowUseCase;
+  private getSignatureFlowByIdUseCase!: GetSignatureFlowByIdUseCase;
+  private getSignatureFlowsByDocumentIdUseCase!: GetSignatureFlowsByDocumentIdUseCase;
+  private getSignatureFlowParticipantsByFlowIdUseCase!: GetSignatureFlowParticipantsByFlowIdUseCase;
+  private getMyPendingSignatureTasksUseCase!: GetMyPendingSignatureTasksUseCase;
+  private getPendingSignatureDocumentsReportUseCase!: GetPendingSignatureDocumentsReportUseCase;
+  private getSignatureProcessTimeReportUseCase!: GetSignatureProcessTimeReportUseCase;
+  private updateSignatureFlowUseCase!: UpdateSignatureFlowUseCase;
+  private addParticipantToFlowUseCase!: AddParticipantToFlowUseCase;
+  private removeParticipantFromFlowUseCase!: RemoveParticipantFromFlowUseCase;
+  private processFlowParticipantActionUseCase!: ProcessFlowParticipantActionUseCase;
+  private deleteSignatureFlowUseCase!: DeleteSignatureFlowUseCase;
+  private resendSignatureFlowNotificationUseCase!: ResendSignatureFlowNotificationUseCase;
+  private getResendableParticipantsUseCase!: GetResendableParticipantsUseCase;
+  private getSignatureFlowTrackingByDocumentUseCase!: GetSignatureFlowTrackingByDocumentUseCase;
+  private skipSignerUseCase!: SkipSignerUseCase;
+  private closeSignatureFlowUseCase!: CloseSignatureFlowUseCase;
+  private reopenSignatureFlowUseCase!: ReopenSignatureFlowUseCase;
+  private autoRejectValidatorUseCase!: AutoRejectValidatorUseCase;
 
   // Use Cases - FileShare
   private createFileShareUseCase!: CreateFileShareUseCase;
   private getFileByShareTokenUseCase!: GetFileByShareTokenUseCase;
+
+  // Services
+  private emailService!: EmailService;
+  private emailQueueService!: EmailQueueService;
+  private emailQueueProcessor!: EmailQueueProcessor;
+  private signatureFlowAutoCloseProcessor!: SignatureFlowAutoCloseProcessor;
+
+  // Extra user use cases
+  private setPasswordUseCase!: SetPasswordUseCase;
+  private sendActivationEmailUseCase!: SendActivationEmailUseCase;
+  private sendPasswordResetEmailUseCase!: SendPasswordResetEmailUseCase;
+  private resetPasswordUseCase!: ResetPasswordUseCase;
 
   public async initialize(): Promise<void> {
     // Initialize repositories
@@ -444,9 +629,20 @@ export class DependencyContainer {
     this.groupRepository = new TypeOrmGroupRepository();
     this.companyRepository = new TypeOrmCompanyRepository();
     this.areaRepository = new TypeOrmAreaRepository();
+    this.landingSettingsRepository = new TypeOrmLandingSettingsRepository();
     this.divisionRepository = new TypeOrmDivisionRepository();
     this.bulkUploadTemplateRepository = new TypeOrmBulkUploadTemplateRepository();
     this.fileShareRepository = new TypeOrmFileShareRepository();
+    this.documentTemplateRepository = new TypeOrmDocumentTemplateRepository();
+    this.signatureRepository = new TypeOrmSignatureRepository();
+    this.signatureVerificationCodeRepository = new TypeOrmSignatureVerificationCodeRepository();
+    this.signatureCodeNotificationRepository = new TypeOrmSignatureCodeNotificationRepository();
+    this.userSignatureRepository = new TypeOrmUserSignatureRepository();
+    this.signatureFlowRepository = new TypeOrmSignatureFlowRepository();
+    this.signatureFlowParticipantRepository = new TypeOrmSignatureFlowParticipantRepository();
+    this.inAppNotificationRepository = new TypeOrmInAppNotificationRepository();
+    this.externalParticipantTokenRepository = new TypeOrmExternalParticipantTokenRepository();
+    this.signatureFlowNotificationRepository = new TypeOrmSignatureFlowNotificationRepository();
 
     // Initialize User use cases
     this.createUserUseCase = new CreateUserUseCase(this.userRepository, this.roleRepository, this.groupRepository);
@@ -456,6 +652,29 @@ export class DependencyContainer {
     this.deleteUserUseCase = new DeleteUserUseCase(this.userRepository);
     this.assignRoleToUserUseCase = new AssignRoleToUserUseCase(this.userRepository, this.roleRepository);
     this.loginUserUseCase = new LoginUserUseCase(this.userRepository);
+    this.changePasswordUseCase = new ChangePasswordUseCase(this.userRepository);
+
+    // Initialize Email service and extra user use cases (must be before controllers)
+    this.emailService = new NodemailerEmailService();
+    this.emailQueueService = new EmailQueueService();
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new ServerError('JWT_SECRET is not configured');
+    }
+    this.setPasswordUseCase = new SetPasswordUseCase(this.userRepository, jwtSecret);
+    this.sendActivationEmailUseCase = new SendActivationEmailUseCase(
+      this.userRepository,
+      this.emailService,
+      jwtSecret,
+      process.env.FRONTEND_URL ?? '',
+    );
+    this.sendPasswordResetEmailUseCase = new SendPasswordResetEmailUseCase(
+      this.userRepository,
+      this.emailService,
+      jwtSecret,
+      process.env.FRONTEND_URL ?? '',
+    );
+    this.resetPasswordUseCase = new ResetPasswordUseCase(this.userRepository, jwtSecret);
 
     // Initialize DocumentType use cases
     this.createDocumentTypeUseCase = new CreateDocumentTypeUseCase(this.documentTypeRepository);
@@ -483,12 +702,16 @@ export class DependencyContainer {
 
 
     // Initialize Document use cases
+    this.documentFieldValueRepository = new TypeOrmDocumentFieldValueRepository();
     this.createDocumentUseCase = new CreateDocumentUseCase(
       this.documentRepository,
       this.documentHistoryRepository,
       this.groupRepository,
       this.documentModelRepository,
       this.familyRepository,
+      this.documentFieldValueRepository,
+      this.colaboratorRepository,
+      this.areaRepository,
     );
     this.getDocumentByIdUseCase = new GetDocumentByIdUseCase(this.documentRepository);
     this.getAllDocumentsUseCase = new GetAllDocumentsUseCase(this.documentRepository);
@@ -502,11 +725,15 @@ export class DependencyContainer {
       this.documentHistoryRepository,
       this.groupRepository,
       this.documentModelRepository,
-      this.fileRepository,
+      this.documentFieldValueRepository,
+      this.colaboratorRepository,
+      this.contractRepository,
+      this.areaRepository,
     );
     this.deleteDocumentUseCase = new DeleteDocumentUseCase(this.documentRepository);
     this.sendToReviewDocumentUseCase = new SendToReviewDocumentUseCase(this.documentRepository, this.documentHistoryRepository);
     this.approveDocumentUseCase = new ApproveDocumentUseCase(this.documentRepository, this.documentHistoryRepository);
+    this.directApproveDocumentUseCase = new DirectApproveDocumentUseCase(this.documentRepository, this.documentHistoryRepository);
     this.rejectDocumentUseCase = new RejectDocumentUseCase(this.documentRepository, this.documentHistoryRepository);
     this.rejectDocumentWithCommentsUseCase = new RejectDocumentWithCommentsUseCase(this.documentRepository, this.documentHistoryRepository);
     this.getDocumentHistoryUseCase = new GetDocumentHistoryUseCase(this.documentHistoryRepository);
@@ -519,6 +746,7 @@ export class DependencyContainer {
       this.documentModelRepository,
       this.familyRepository,
     );
+    this.downloadDocumentsZipUseCase = new DownloadDocumentsZipUseCase(this.documentRepository, this.fileRepository);
 
 
     // Initialize Contract use cases
@@ -563,6 +791,11 @@ export class DependencyContainer {
     this.addColaboratorToContractUseCase = new AddColaboratorToContractUseCase(this.contractRepository);
     this.removeColaboratorFromContractUseCase = new RemoveColaboratorFromContractUseCase(this.contractRepository);
     this.getContractColaboratorsUseCase = new GetContractColaboratorsUseCase(this.contractRepository);
+    this.getContractDocumentStructureUseCase = new GetContractDocumentStructureUseCase(
+      this.contractRepository,
+      this.documentModelRepository,
+      this.documentRepository,
+    );
 
     // Initialize Colaborator use cases
     this.createColaboratorUseCase = new CreateColaboratorUseCase(this.colaboratorRepository, this.groupRepository);
@@ -571,6 +804,7 @@ export class DependencyContainer {
     this.deleteColaboratorUseCase = new DeleteColaboratorUseCase(this.colaboratorRepository);
     this.updateColaboratorContractsUseCase = new UpdateColaboratorContractsUseCase(this.colaboratorRepository);
     this.getContractsByColaboratorUseCase = new GetContractsByColaboratorUseCase(this.contractRepository);
+    this.linkUserToColaboratorUseCase = new LinkUserToColaboratorUseCase(this.colaboratorRepository, this.userRepository);
 
     // Initialize Permission use cases
     this.savePermissionUseCase = new SavePermissionUseCase(this.permissionRepository);
@@ -584,7 +818,7 @@ export class DependencyContainer {
     this.getRoleByIdUseCase = new GetRoleByIdUseCase(this.roleRepository);
     this.getAllRolesUseCase = new GetAllRolesUseCase(this.roleRepository);
     this.updateRoleUseCase = new UpdateRoleUseCase(this.roleRepository);
-    this.deleteRoleUseCase = new DeleteRoleUseCase(this.roleRepository);
+    this.deleteRoleUseCase = new DeleteRoleUseCase(this.roleRepository, this.userRepository);
     this.assignPermissionsToRoleUseCase = new AssignPermissionsToRoleUseCase(
       this.roleRepository,
       this.permissionRepository,
@@ -622,6 +856,7 @@ export class DependencyContainer {
       this.getColaboratorGroupsUseCase,
       this.updateColaboratorContractsUseCase,
       this.getContractsByColaboratorUseCase,
+      this.linkUserToColaboratorUseCase,
     );
 
     this.contractController = new ContractController(
@@ -654,6 +889,7 @@ export class DependencyContainer {
       this.removeColaboratorFromContractUseCase,
       this.getContractColaboratorsUseCase,
       this.getParentContractsUseCase,
+      this.getContractDocumentStructureUseCase,
     );
 
     this.documentTypeController = new DocumentTypeController(
@@ -688,12 +924,15 @@ export class DependencyContainer {
       this.deleteDocumentUseCase,
       this.sendToReviewDocumentUseCase,
       this.approveDocumentUseCase,
+      this.directApproveDocumentUseCase,
       this.rejectDocumentUseCase,
       this.rejectDocumentWithCommentsUseCase,
       this.contractReviewerRepository,
       this.getAllDocumentTypesWithSubtypesUseCase,
       this.getDashboardMetricsUseCase,
       this.assignDocumentsToGroupUseCase,
+      this.downloadDocumentsZipUseCase,
+      this.signatureFlowRepository,
     );
 
     this.documentHistoryController = new DocumentHistoryController(
@@ -834,6 +1073,17 @@ export class DependencyContainer {
       this.deleteAreaUseCase,
     );
 
+    // Initialize Landing settings use cases
+    this.getLandingSettingsUseCase = new GetLandingSettingsUseCase(this.landingSettingsRepository);
+    this.updateLandingSettingsUseCase = new UpdateLandingSettingsUseCase(this.landingSettingsRepository);
+    this.submitLandingContactUseCase = new SubmitLandingContactUseCase(this.landingSettingsRepository, this.emailQueueService);
+
+    this.landingSettingsController = new LandingSettingsController(
+      this.getLandingSettingsUseCase,
+      this.updateLandingSettingsUseCase,
+      this.submitLandingContactUseCase,
+    );
+
     // Initialize Division use cases
     this.createDivisionUseCase = new CreateDivisionUseCase(this.divisionRepository);
     this.getDivisionUseCase = new GetDivisionUseCase(this.divisionRepository);
@@ -856,13 +1106,21 @@ export class DependencyContainer {
       this.updateUserUseCase,
       this.deleteUserUseCase,
       this.assignRoleToUserUseCase,
+      this.sendActivationEmailUseCase,
     );
 
     this.authController = new AuthController(
       this.loginUserUseCase,
       this.getUserByIdUseCase,
       this.updateUserUseCase,
+      this.changePasswordUseCase,
       this.groupRepository,
+      this.inAppNotificationRepository,
+      this.documentRepository,
+      this.setPasswordUseCase,
+      this.sendPasswordResetEmailUseCase,
+      this.resetPasswordUseCase,
+      jwtSecret,
     );
 
     this.fileController = new FileController(this.fileRepository);
@@ -885,6 +1143,304 @@ export class DependencyContainer {
       this.fileRepository,
       this.bulkUploadTemplateRepository,
       this.bulkLoadColaboratorsUseCase,
+    );
+
+    // Initialize DocumentTemplate use cases
+    this.createDocumentTemplateUseCase = new CreateDocumentTemplateUseCase(
+      this.documentTemplateRepository,
+      this.groupRepository,
+    );
+    this.getDocumentTemplateByIdUseCase = new GetDocumentTemplateByIdUseCase(this.documentTemplateRepository);
+    this.getAllDocumentTemplatesUseCase = new GetAllDocumentTemplatesUseCase(this.documentTemplateRepository);
+    this.getDocumentTemplateVersionsUseCase = new GetDocumentTemplateVersionsUseCase(this.documentTemplateRepository);
+    this.getNextDocumentTemplateCodeUseCase = new GetNextDocumentTemplateCodeUseCase(this.documentTemplateRepository);
+    this.createNewDocumentTemplateVersionUseCase = new CreateNewDocumentTemplateVersionUseCase(this.documentTemplateRepository);
+    this.deleteDocumentTemplateUseCase = new DeleteDocumentTemplateUseCase(this.documentTemplateRepository);
+
+    this.documentTemplateController = new DocumentTemplateController(
+      this.createDocumentTemplateUseCase,
+      this.getDocumentTemplateByIdUseCase,
+      this.getAllDocumentTemplatesUseCase,
+      this.getDocumentTemplateVersionsUseCase,
+      this.getNextDocumentTemplateCodeUseCase,
+      this.createNewDocumentTemplateVersionUseCase,
+      this.deleteDocumentTemplateUseCase,
+    );
+
+    this.signatureFlowNotificationService = new SignatureFlowNotificationService(
+      this.userRepository,
+      this.inAppNotificationRepository,
+      this.emailService,
+      this.emailQueueService,
+      this.signatureFlowNotificationRepository,
+      this.externalParticipantTokenRepository,
+    );
+
+    // Initialize Signature crypto and stamp service first (needed by flow use case)
+    this.signatureCryptoService = new SignatureCryptoService();
+    this.signaturePdfStampService = new SignaturePdfStampService();
+    this.documentVersioningService = new DocumentVersioningService(
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.documentFieldValueRepository,
+    );
+
+    this.processFlowParticipantActionUseCase = new ProcessFlowParticipantActionUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.signatureFlowNotificationService,
+      this.userRepository,
+      this.colaboratorRepository,
+      this.signatureRepository,
+      this.fileRepository,
+      this.signaturePdfStampService,
+      this.externalParticipantTokenRepository,
+      this.documentVersioningService,
+    );
+    this.initiateSignatureUseCase = new InitiateSignatureUseCase(
+      this.signatureRepository,
+      this.signatureVerificationCodeRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.userRepository,
+      this.colaboratorRepository,
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.signatureCryptoService,
+      this.emailService,
+      this.signatureCodeNotificationRepository,
+    );
+    this.validateSignatureCodeUseCase = new ValidateSignatureCodeUseCase(
+      this.signatureRepository,
+      this.signatureVerificationCodeRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.signatureCryptoService,
+      this.userRepository,
+      this.colaboratorRepository,
+      this.processFlowParticipantActionUseCase,
+      this.signaturePdfStampService,
+      this.fileRepository,
+      this.userSignatureRepository,
+      this.documentVersioningService,
+      this.signatureFlowRepository,
+    );
+    this.cancelSignatureUseCase = new CancelSignatureUseCase(
+      this.signatureRepository,
+      this.signatureVerificationCodeRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.processFlowParticipantActionUseCase,
+    );
+    this.getSignatureByDocumentUseCase = new GetSignatureByDocumentUseCase(this.signatureRepository);
+    this.getSignatureByTokenHashUseCase = new GetSignatureByTokenHashUseCase(this.signatureRepository);
+    this.verifyDocumentSignatureUseCase = new VerifyDocumentSignatureUseCase(
+      this.signatureRepository,
+      this.documentRepository,
+    );
+    this.getSignatureSmsPhoneUseCase = new GetSignatureSmsPhoneUseCase(this.colaboratorRepository);
+    this.getPublicDocumentVerificationUseCase = new GetPublicDocumentVerificationUseCase(
+      this.documentRepository,
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.externalParticipantTokenRepository,
+      this.signatureRepository,
+      this.userRepository,
+      this.colaboratorRepository,
+    );
+    this.getSavedSignaturePreviewUseCase = new GetSavedSignaturePreviewUseCase(
+      this.userSignatureRepository,
+      this.fileRepository,
+    );
+    this.signatureController = new SignatureController(
+      this.initiateSignatureUseCase,
+      this.validateSignatureCodeUseCase,
+      this.cancelSignatureUseCase,
+      this.getSignatureByDocumentUseCase,
+      this.getSignatureByTokenHashUseCase,
+      this.verifyDocumentSignatureUseCase,
+      this.getSignatureSmsPhoneUseCase,
+      this.fileRepository,
+      this.getPublicDocumentVerificationUseCase,
+      this.getSavedSignaturePreviewUseCase,
+    );
+
+    // Initialize SignatureFlow use cases and controller
+    this.createSignatureFlowUseCase = new CreateSignatureFlowUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.signatureFlowNotificationService,
+      this.colaboratorRepository,
+      this.externalParticipantTokenRepository,
+      this.emailQueueService,
+    );
+    this.getSignatureFlowByIdUseCase = new GetSignatureFlowByIdUseCase(this.signatureFlowRepository);
+    this.getSignatureFlowsByDocumentIdUseCase = new GetSignatureFlowsByDocumentIdUseCase(this.signatureFlowRepository);
+    this.getSignatureFlowParticipantsByFlowIdUseCase = new GetSignatureFlowParticipantsByFlowIdUseCase(
+      this.signatureFlowParticipantRepository,
+    );
+    this.getMyPendingSignatureTasksUseCase = new GetMyPendingSignatureTasksUseCase(
+      this.signatureFlowParticipantRepository,
+    );
+    this.getPendingSignatureDocumentsReportUseCase = new GetPendingSignatureDocumentsReportUseCase(
+      this.signatureFlowRepository,
+    );
+    this.getSignatureProcessTimeReportUseCase = new GetSignatureProcessTimeReportUseCase(
+      this.signatureFlowRepository,
+    );
+    this.updateSignatureFlowUseCase = new UpdateSignatureFlowUseCase(this.signatureFlowRepository);
+    this.addParticipantToFlowUseCase = new AddParticipantToFlowUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.colaboratorRepository,
+    );
+    this.removeParticipantFromFlowUseCase = new RemoveParticipantFromFlowUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+    );
+    this.deleteSignatureFlowUseCase = new DeleteSignatureFlowUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+    );
+    this.resendSignatureFlowNotificationUseCase = new ResendSignatureFlowNotificationUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.documentRepository,
+      this.signatureFlowNotificationService,
+    );
+    this.getResendableParticipantsUseCase = new GetResendableParticipantsUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.userRepository,
+    );
+    this.getSignatureFlowTrackingByDocumentUseCase = new GetSignatureFlowTrackingByDocumentUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.signatureFlowNotificationRepository,
+      this.signatureRepository,
+      this.externalParticipantTokenRepository,
+      this.userRepository,
+      this.emailQueueService,
+      this.signatureCodeNotificationRepository,
+      this.signatureVerificationCodeRepository,
+    );
+    this.skipSignerUseCase = new SkipSignerUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.signatureFlowNotificationService,
+      this.processFlowParticipantActionUseCase,
+    );
+    this.closeSignatureFlowUseCase = new CloseSignatureFlowUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.signatureFlowNotificationService,
+    );
+    this.reopenSignatureFlowUseCase = new ReopenSignatureFlowUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.signatureFlowNotificationService,
+    );
+    this.autoRejectValidatorUseCase = new AutoRejectValidatorUseCase(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+      this.signatureFlowNotificationService,
+      this.processFlowParticipantActionUseCase,
+    );
+    // External participant access
+    const getExternalAccessUseCase = new GetExternalParticipantAccessUseCase(
+      this.externalParticipantTokenRepository,
+      this.signatureFlowParticipantRepository,
+      this.signatureFlowRepository,
+      this.documentRepository,
+    );
+    const submitExternalActionUseCase = new SubmitExternalParticipantActionUseCase(
+      this.externalParticipantTokenRepository,
+      this.signatureFlowParticipantRepository,
+      this.signatureFlowRepository,
+      this.processFlowParticipantActionUseCase,
+    );
+    const requestExternalOtpUseCase = new RequestExternalSignerOtpUseCase(
+      this.externalParticipantTokenRepository,
+      this.signatureFlowParticipantRepository,
+      this.signatureFlowRepository,
+      this.signatureCryptoService,
+      this.emailService,
+      this.signatureCodeNotificationRepository,
+    );
+    const validateExternalOtpUseCase = new ValidateExternalSignerOtpUseCase(
+      this.externalParticipantTokenRepository,
+      this.signatureFlowParticipantRepository,
+      this.signatureCryptoService,
+      this.processFlowParticipantActionUseCase,
+      this.signatureFlowRepository,
+      this.colaboratorRepository,
+      this.fileRepository,
+      this.userSignatureRepository,
+    );
+    const getExternalSignerSavedSignatureUseCase = new GetExternalSignerSavedSignatureUseCase(
+      this.externalParticipantTokenRepository,
+      this.signatureFlowParticipantRepository,
+      this.getSavedSignaturePreviewUseCase,
+    );
+    this.externalParticipantController = new ExternalParticipantController(
+      getExternalAccessUseCase,
+      submitExternalActionUseCase,
+      requestExternalOtpUseCase,
+      validateExternalOtpUseCase,
+      this.fileRepository,
+      getExternalSignerSavedSignatureUseCase,
+    );
+
+    this.signatureFlowController = new SignatureFlowController(
+      this.createSignatureFlowUseCase,
+      this.getSignatureFlowByIdUseCase,
+      this.getSignatureFlowsByDocumentIdUseCase,
+      this.getSignatureFlowParticipantsByFlowIdUseCase,
+      this.getMyPendingSignatureTasksUseCase,
+      this.getPendingSignatureDocumentsReportUseCase,
+      this.getSignatureProcessTimeReportUseCase,
+      this.updateSignatureFlowUseCase,
+      this.addParticipantToFlowUseCase,
+      this.removeParticipantFromFlowUseCase,
+      this.processFlowParticipantActionUseCase,
+      this.deleteSignatureFlowUseCase,
+      this.resendSignatureFlowNotificationUseCase,
+      this.getResendableParticipantsUseCase,
+      this.getSignatureFlowTrackingByDocumentUseCase,
+      this.skipSignerUseCase,
+      this.closeSignatureFlowUseCase,
+      this.reopenSignatureFlowUseCase,
+    );
+
+    this.emailQueueController = new EmailQueueController(this.emailQueueService);
+
+    // Initialize email queue processor (depends on repositories and email service)
+    this.emailQueueProcessor = new EmailQueueProcessor(
+      this.emailQueueService,
+      this.emailService,
+      this.signatureFlowRepository,
+      this.documentRepository,
+      this.documentHistoryRepository,
+    );
+
+    this.signatureFlowAutoCloseProcessor = new SignatureFlowAutoCloseProcessor(
+      this.signatureFlowRepository,
+      this.signatureFlowParticipantRepository,
+      this.closeSignatureFlowUseCase,
+      this.skipSignerUseCase,
+      this.autoRejectValidatorUseCase,
     );
   }
 
@@ -957,6 +1513,10 @@ export class DependencyContainer {
     return this.areaController;
   }
 
+  public getLandingSettingsController(): LandingSettingsController {
+    return this.landingSettingsController;
+  }
+
   public getDivisionController(): DivisionController {
     return this.divisionController;
   }
@@ -1013,6 +1573,10 @@ export class DependencyContainer {
     return this.loginUserUseCase;
   }
 
+  public getChangePasswordUseCase(): ChangePasswordUseCase {
+    return this.changePasswordUseCase;
+  }
+
   public getSaveRoleUseCase(): SaveRoleUseCase {
     return this.saveRoleUseCase;
   }
@@ -1043,5 +1607,41 @@ export class DependencyContainer {
 
   public getFileShareController(): FileShareController {
     return this.fileShareController;
+  }
+
+  public getEmailService(): EmailService {
+    return this.emailService;
+  }
+
+  public getDocumentTemplateController(): DocumentTemplateController {
+    return this.documentTemplateController;
+  }
+
+  public getSignatureController(): SignatureController {
+    return this.signatureController;
+  }
+
+  public getSignatureFlowController(): SignatureFlowController {
+    return this.signatureFlowController;
+  }
+
+  public getExternalParticipantController(): ExternalParticipantController {
+    return this.externalParticipantController;
+  }
+
+  public getEmailQueueService(): EmailQueueService {
+    return this.emailQueueService;
+  }
+
+  public getEmailQueueProcessor(): EmailQueueProcessor {
+    return this.emailQueueProcessor;
+  }
+
+  public getSignatureFlowAutoCloseProcessor(): SignatureFlowAutoCloseProcessor {
+    return this.signatureFlowAutoCloseProcessor;
+  }
+
+  public getEmailQueueController(): EmailQueueController {
+    return this.emailQueueController;
   }
 }

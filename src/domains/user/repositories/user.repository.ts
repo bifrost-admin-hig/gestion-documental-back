@@ -11,5 +11,6 @@ export interface UserRepository {
   existsByEmail(email: string): Promise<boolean>;
   save(request: CreateUserProps): Promise<User>;
   update(request: UpdateUserProps): Promise<User>;
+  updatePasswordNonce(userId: string, nonce: string | null): Promise<void>;
   delete(id: string): Promise<void>;
 }

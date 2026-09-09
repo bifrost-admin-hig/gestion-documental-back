@@ -1,9 +1,16 @@
 import { DocumentModel } from '../entities/document-model.entity';
 
+export interface DocumentModelContractFilters {
+  familyId?: string;
+  documentTypeId?: string;
+  documentSubtypeId?: string;
+}
+
 export interface IDocumentModelRepository {
   findAll(groupId?: number, familyId?: string): Promise<DocumentModel[]>;
   findById(id: string): Promise<DocumentModel | null>;
   findByFamilyId(familyId: string, groupId?: number): Promise<DocumentModel[]>;
+  findByContractId(contractId: string, groupId: number, filters?: DocumentModelContractFilters): Promise<DocumentModel[]>;
   findByFamilyTypeSubtype(
     familyId: string,
     documentTypeId: string,

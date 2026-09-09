@@ -17,6 +17,7 @@ export interface CreateContractDto {
   dotacionVehiculos?: number;
   descripcionServicio?: string;
   nombreProyecto?: string;
+  turnos?: string;
   jornadaTrabajo: JornadaTrabajo;
   groupId: number;
 }

@@ -21,7 +21,7 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
   async findById(id: string): Promise<Colaborator | null> {
     const colaboratorEntity = await this.repository.findOne({
       where: { id, deletedAt: IsNull() },
-      relations: ['contracts'],
+      relations: ['contracts', 'user'],
     });
     if (!colaboratorEntity) return null;
     return this.toDomain(colaboratorEntity);
@@ -70,7 +70,7 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
   ): Promise<Colaborator | null> {
     const colaboratorEntity = await this.repository.findOne({
       where: { numeroDocumento, deletedAt: IsNull() },
-      relations: ['contracts'],
+      relations: ['contracts', 'user'],
     });
     if (!colaboratorEntity) return null;
     return this.toDomain(colaboratorEntity);
@@ -90,7 +90,7 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
   async findByEmail(email: string): Promise<Colaborator | null> {
     const colaboratorEntity = await this.repository.findOne({
       where: { email: email.toLowerCase(), deletedAt: IsNull() },
-      relations: ['contracts'],
+      relations: ['contracts', 'user'],
     });
     if (!colaboratorEntity) return null;
     return this.toDomain(colaboratorEntity);
@@ -99,7 +99,7 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
   async findByEmailAndGroupId(email: string, groupId: number): Promise<Colaborator | null> {
     const entity = await this.repository.findOne({
       where: { email: email.toLowerCase(), groupId, deletedAt: IsNull() },
-      relations: ['contracts'],
+      relations: ['contracts', 'user'],
     });
     return entity ? this.toDomain(entity) : null;
   }
@@ -214,7 +214,7 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
   async findByIdWithGroups(id: string): Promise<Colaborator | null> {
     const colaboratorEntity = await this.repository.findOne({
       where: { id, deletedAt: IsNull() },
-      relations: ['groups', 'contracts'],
+      relations: ['groups', 'contracts', 'user'],
     });
     if (!colaboratorEntity) return null;
     return this.toDomain(colaboratorEntity);
@@ -237,6 +237,14 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
     // Or we can use query builder to replace relations
     colaborator.contracts = contractIds.map((id) => ({ id } as ContractEntity));
     await this.repository.save(colaborator);
+  }
+
+  async findByUserId(userId: string): Promise<Colaborator | null> {
+    const entity = await this.repository.findOne({
+      where: { userId, deletedAt: IsNull() },
+      relations: ['contracts', 'user'],
+    });
+    return entity ? this.toDomain(entity) : null;
   }
 
   private toDomain(entity: ColaboratorEntity): Colaborator {
@@ -282,6 +290,7 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
           : new Date(entity.deletedAt))
         : null,
       contractIds: entity.contracts?.map((c) => c.id),
+      userId: entity.userId ?? null,
     };
     return Colaborator.fromPersistence(props);
   }
@@ -315,6 +324,7 @@ export class TypeOrmColaboratorRepository implements ColaboratorRepository {
       createdAt: colaborator.createdAt,
       updatedAt: colaborator.updatedAt,
       deletedAt: colaborator.deletedAt,
+      userId: colaborator.userId ?? null,
       contracts: colaborator.contractIds?.map((id) => ({ id } as ContractEntity)),
     };
   }

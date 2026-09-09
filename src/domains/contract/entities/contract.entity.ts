@@ -7,7 +7,7 @@ import { Colaborator, ColaboratorJson } from '@domains/colaborators/entities/col
 
 interface BaseContractProps {
   rutSociedad: string;
-  nombreColaborador: string;
+  nombreColaborador?: string;
   administradorContratoMandante: string;
   administradorContratoEmpresa: string;
   rutAdministradorContrato: string;
@@ -23,6 +23,7 @@ interface BaseContractProps {
   companyName?: string;
   descripcionServicio?: string;
   nombreProyecto?: string;
+  turnos?: string;
   startDate?: DateType,
   endDate?: DateType,
   contractType?: string;
@@ -59,6 +60,7 @@ export type UpdateContractProps = {
   companyId?: string;
   descripcionServicio?: string;
   nombreProyecto?: string;
+  turnos?: string;
   startDate?: DateType;
   endDate?: DateType;
   contractType?: string;
@@ -90,7 +92,7 @@ export type ContractJson = Overlap<BaseContractProps, {
 export class Contract {
   id: string;
   rutSociedad: string;
-  nombreColaborador: string;
+  nombreColaborador?: string;
   startDate: Date;
   endDate: Date;
   contractType: ContractType;
@@ -111,6 +113,7 @@ export class Contract {
   dotacionVehiculos: number;
   descripcionServicio?: string;
   nombreProyecto?: string;
+  turnos?: string;
   jornadaTrabajo: JornadaTrabajo;
   status: ContractStatus;
   employeeId?: string;
@@ -142,9 +145,6 @@ export class Contract {
   private static validateRequired(props: CreateContractProps): void {
     if (!props.rutSociedad?.trim()) {
       throw new ValidationError('RUT de sociedad is required', 'rutSociedad');
-    }
-    if (!props.nombreColaborador?.trim()) {
-      throw new ValidationError('Nombre colaborador is required', 'nombreColaborador');
     }
     if (!props.administradorContratoMandante?.trim()) {
       throw new ValidationError('Administrador contrato mandante is required', 'administradorContratoMandante');
@@ -273,6 +273,10 @@ export class Contract {
     this.nombreProyecto = nombreProyecto?.trim();
   }
 
+  public updateTurnos(turnos?: string): void {
+    this.turnos = turnos?.trim() || undefined;
+  }
+
   public changeGroup(groupId: number): void {
     if (!groupId || groupId <= 0) {
       throw new ValidationError('Group ID must be positive', 'groupId');
@@ -351,6 +355,7 @@ export class Contract {
       nombreProyecto: this.nombreProyecto,
       contractType: this.contractType,
       jornadaTrabajo: this.jornadaTrabajo,
+      turnos: this.turnos,
       status: this.status,
       dotacionPersonal: this.dotacionPersonal,
       dotacionVehiculos: this.dotacionVehiculos,

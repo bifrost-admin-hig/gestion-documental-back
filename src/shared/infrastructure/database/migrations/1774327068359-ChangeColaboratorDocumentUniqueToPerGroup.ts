@@ -7,13 +7,13 @@ export class ChangeColaboratorDocumentUniqueToPerGroup1774327068359 implements M
     // Elimina el índice antiguo si existe
     try {
       await queryRunner.query(`DROP INDEX \`IDX_a09ad8dbb6f626ff6ac25c3f6e\` ON \`colaborators\``);
-    } catch (e) {
+    } catch (_e) {
       // Ignora si no existe
     }
     // Elimina el índice nuevo si existe
     try {
       await queryRunner.query(`DROP INDEX \`IDX_colaborators_numero_documento_group_id\` ON \`colaborators\``);
-    } catch (e) {
+    } catch (_e) {
       // Ignora si no existe
     }
     // Intenta crear el índice, ignora si ya existe
@@ -39,12 +39,12 @@ export class ChangeColaboratorDocumentUniqueToPerGroup1774327068359 implements M
       if (emailIdxRows?.length) {
         await queryRunner.query(`DROP INDEX \`${emailIdxRows[0].INDEX_NAME}\` ON \`colaborators\``);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignora si no existe
     }
     try {
       await queryRunner.query(`DROP INDEX \`IDX_colaborators_email_group_id\` ON \`colaborators\``);
-    } catch (e) {
+    } catch (_e) {
       // Ignora si no existe
     }
     try {

@@ -78,6 +78,10 @@ export class UpdateContractUseCase {
       contract.updateNombreProyecto(request.nombreProyecto);
     }
 
+    if (request.turnos !== undefined) {
+      contract.updateTurnos(request.turnos);
+    }
+
     if (request.jornadaTrabajo !== undefined) {
       contract.updateJornadaTrabajo(request.jornadaTrabajo);
     }
@@ -116,6 +120,7 @@ export class UpdateContractUseCase {
       'nombreMandante',
       'descripcionServicio',
       'nombreProyecto',
+      'turnos',
       'division',
       'area',
       'jornadaTrabajo',

@@ -5,7 +5,7 @@ export interface ColaboratorGroupRepository {
   findById(id: number): Promise<ColaboratorGroup | null>;
   findByName(name: string): Promise<ColaboratorGroup | null>;
   findIn(ids: number[]): Promise<ColaboratorGroup[]>;
-  findAll(): Promise<ColaboratorGroup[]>;
+  findAll(groupId?: number): Promise<ColaboratorGroup[]>;
   save(request: CreateColaboratorGroupProps): Promise<ColaboratorGroup>;
   update(request: UpdateColaboratorGroupProps): Promise<ColaboratorGroup>;
   delete(id: number): Promise<void>;

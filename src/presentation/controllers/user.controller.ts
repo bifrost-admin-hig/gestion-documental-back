@@ -3,9 +3,11 @@ import { AssignRoleToUserUseCase } from '@domains/user/use-cases/assign-role-to-
 import { CreateUserUseCase } from '@domains/user/use-cases/create-user.use-case';
 import { GetUserByIdUseCase, GetAllUsersUseCase } from '@domains/user/use-cases/get-user.use-case';
 import { UpdateUserUseCase, DeleteUserUseCase } from '@domains/user/use-cases/update-user.use-case';
+import { SendActivationEmailUseCase } from '@domains/user/use-cases/send-activation-email.use-case';
 import { asyncHandler } from '@shared/middleware/validation';
 import { ForbiddenError } from '@shared/domain/errors';
 import { isRbacEnabled } from '@shared/utils/requests';
+import { UserStatus } from '@domains/user/value-objects/user-status';
 
 export class UserController {
   constructor(
@@ -15,6 +17,7 @@ export class UserController {
     private readonly updateUserUseCase: UpdateUserUseCase,
     private readonly deleteUserUseCase: DeleteUserUseCase,
     public readonly assignRoleToUserUseCase: AssignRoleToUserUseCase,
+    private readonly sendActivationEmailUseCase: SendActivationEmailUseCase,
   ) {}
 
   public createUser = asyncHandler(async (req: Request, res: Response) => {
@@ -59,11 +62,37 @@ export class UserController {
 
   public updateUser = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
+    const currentUserId = req.auth?.user?.id;
+
+    if (req.body.status !== undefined && currentUserId === id) {
+      throw new ForbiddenError('You cannot change your own status');
+    }
+
+    const previousUser = await this.getUserByIdUseCase.execute(id);
     const user = await this.updateUserUseCase.execute({ id, ...req.body });
+
+    // Send activation email when a user is activated for the first time (unless explicitly skipped)
+    let emailWarning: string | undefined;
+    const skipEmail = req.body.skipEmail === true;
+    if (
+      !skipEmail &&
+      req.body.status === UserStatus.ACTIVE &&
+      previousUser?.status !== UserStatus.ACTIVE
+    ) {
+      try {
+        await this.sendActivationEmailUseCase.execute(id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.warn('Failed to send activation email', { userId: id, error: message });
+        emailWarning = 'No se pudo enviar el correo de activación. Verifique la configuración del servidor de correo.';
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: user.toJSON(),
       message: 'User updated successfully',
+      ...(emailWarning ? { emailWarning } : {}),
     });
   });
 

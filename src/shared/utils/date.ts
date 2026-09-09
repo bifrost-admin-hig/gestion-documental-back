@@ -5,6 +5,12 @@ export class DateUtils {
     return d;
   }
 
+  public static addDays(date: DateType, days: number): Date {
+    const d = DateUtils.parse(date);
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
   public static isAfter(date1?: DateType | null, date2?: DateType | null): boolean {
     const d1 = DateUtils.parse(date1, true);
     const d2 = DateUtils.parse(date2, true);

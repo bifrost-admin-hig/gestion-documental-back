@@ -1,0 +1,148 @@
+### Variables
+@baseUrl = http://localhost:3000
+@token = Bearer <tu-token-aqui>
+@documentId = <uuid-del-documento>
+@flowId = <uuid-del-flujo>
+@participantId = <uuid-del-participante>
+@userId = <uuid-del-usuario>
+
+### ─── Crear flujo de firma ───────────────────────────────────────────────────
+# POST /api/signature-flows
+# Permisos requeridos: signature-flow:create
+# Crea un flujo con participantes; el usuario autenticado es el responsable.
+
+POST {{baseUrl}}/api/signature-flows
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "documentId": "{{documentId}}",
+  "orderType": "sequential",
+  "participants": [
+    {
+      "userId": "{{userId}}",
+      "role": "validator",
+      "order": 1
+    },
+    {
+      "externalName": "Juan Pérez",
+      "externalEmail": "juan@example.com",
+      "role": "signer",
+      "order": 2
+    }
+  ]
+}
+
+###
+
+### Flujo paralelo (todos actúan al mismo tiempo)
+POST {{baseUrl}}/api/signature-flows
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "documentId": "{{documentId}}",
+  "orderType": "parallel",
+  "participants": [
+    {
+      "userId": "{{userId}}",
+      "role": "signer"
+    },
+    {
+      "externalEmail": "otro@example.com",
+      "role": "signer"
+    }
+  ]
+}
+
+###
+
+### ─── Obtener flujo por ID ────────────────────────────────────────────────────
+# GET /api/signature-flows/:id
+# Permisos requeridos: signature-slow:read
+
+GET {{baseUrl}}/api/signature-flows/{{flowId}}
+Authorization: {{token}}
+
+###
+
+### ─── Obtener flujos por documento ───────────────────────────────────────────
+# GET /api/signature-flows/document/:documentId
+# Permisos requeridos: signature-flow:read
+
+GET {{baseUrl}}/api/signature-flows/document/{{documentId}}
+Authorization: {{token}}
+
+###
+
+### ─── Obtener participantes de un flujo ───────────────────────────────────────
+# GET /api/signature-flows/:id/participants
+# Permisos requeridos: signature-flow:read
+
+GET {{baseUrl}}/api/signature-flows/{{flowId}}/participants
+Authorization: {{token}}
+
+###
+
+### ─── Mis documentos pendientes de acción ─────────────────────────────────────
+# GET /api/signature-flows/my-pending
+# Permisos requeridos: signature-flow:read
+# Devuelve participaciones del usuario autenticado (como firmante/validador)
+
+GET {{baseUrl}}/api/signature-flows/my-pending
+Authorization: {{token}}
+
+###
+
+### ─── Actualizar tipo de orden del flujo ─────────────────────────────────────
+# PUT /api/signature-flows/:id
+# Permisos requeridos: signature-flow:update
+# Solo funciona en flujos en estado "draft"
+
+PUT {{baseUrl}}/api/signature-flows/{{flowId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "orderType": "parallel"
+}
+
+###
+
+### ─── Agregar participante al flujo ──────────────────────────────────────────
+# POST /api/signature-flows/:id/participants
+# Permisos requeridos: signature-flow:update
+# Solo funciona en flujos en estado "draft"
+
+POST {{baseUrl}}/api/signature-flows/{{flowId}}/participants
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "externalName": "María González",
+  "externalEmail": "maria@empresa.com",
+  "role": "validator",
+  "order": 1
+}
+
+###
+
+### ─── Eliminar participante del flujo ────────────────────────────────────────
+# DELETE /api/signature-flows/:id/participants/:participantId
+# Permisos requeridos: signature-flow:update
+# Solo funciona en flujos en estado "draft"
+
+DELETE {{baseUrl}}/api/signature-flows/{{flowId}}/participants/{{participantId}}
+Authorization: {{token}}
+
+###
+
+### ─── Eliminar flujo de firma ────────────────────────────────────────────────
+# DELETE /api/signature-flows/:id
+# Permisos requeridos: signature-flow:delete
+# Solo funciona en flujos en estado "draft"
+
+DELETE {{baseUrl}}/api/signature-flows/{{flowId}}
+Authorization: {{token}}
+
+###

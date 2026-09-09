@@ -34,7 +34,8 @@ export class DivisionController {
   });
 
   public listDivisions = asyncHandler(async (req: Request, res: Response) => {
-    const divisions = await this.listDivisionsUseCase.execute();
+    const groupId = req.auth?.groupId;
+    const divisions = await this.listDivisionsUseCase.execute(groupId);
     res.status(200).json({
       success: true,
       data: divisions.map((division) => division.toJSON()),

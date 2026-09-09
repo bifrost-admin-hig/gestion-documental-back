@@ -1,5 +1,5 @@
 import { Repository, IsNull } from 'typeorm';
-import { type IDocumentModelRepository } from '@domains/document-model/repositories/document-model.repository.interface';
+import { type IDocumentModelRepository, type DocumentModelContractFilters } from '@domains/document-model/repositories/document-model.repository.interface';
 import { DocumentModel, type DocumentModelProps } from '@domains/document-model/entities/document-model.entity';
 import { DocumentModelEntity } from '../database/entities/document-model.entity';
 import { AppDataSource } from '../database/typeorm.config';
@@ -44,6 +44,35 @@ export class TypeOrmDocumentModelRepository implements IDocumentModelRepository 
       order: { createdAt: 'DESC' },
     });
     return entities.map(entity => this.toDomain(entity));
+  }
+
+  async findByContractId(contractId: string, groupId: number, filters?: DocumentModelContractFilters): Promise<DocumentModel[]> {
+    const qb = this.repository
+      .createQueryBuilder('dm')
+      .innerJoin('families', 'f', 'f.id = dm.family_id AND f.contract_id = :contractId AND f.deleted_at IS NULL', { contractId })
+      .leftJoin('dm.documentType', 'dt')
+      .leftJoin('dm.documentSubtype', 'dst')
+      .addSelect(['f.id', 'f.name', 'dt.id', 'dt.name', 'dst.id', 'dst.name'])
+      .where('dm.group_id = :groupId', { groupId })
+      .andWhere('dm.required_for_contract = :req', { req: true })
+      .andWhere('dm.deleted_at IS NULL');
+
+    if (filters?.familyId) {
+      qb.andWhere('dm.family_id = :familyId', { familyId: filters.familyId });
+    }
+    if (filters?.documentTypeId) {
+      qb.andWhere('dm.document_type_id = :documentTypeId', { documentTypeId: filters.documentTypeId });
+    }
+    if (filters?.documentSubtypeId) {
+      qb.andWhere('dm.document_subtype_id = :documentSubtypeId', { documentSubtypeId: filters.documentSubtypeId });
+    }
+
+    const rawAndEntities = await qb.getRawAndEntities();
+
+    return rawAndEntities.entities.map((entity, idx) => {
+      const raw = rawAndEntities.raw[idx];
+      return this.toDomain(entity, raw?.f_name as string | undefined);
+    });
   }
 
   async findByFamilyTypeSubtype(
@@ -103,7 +132,7 @@ export class TypeOrmDocumentModelRepository implements IDocumentModelRepository 
     await this.repository.restore(id);
   }
 
-  private toDomain(entity: DocumentModelEntity): DocumentModel {
+  private toDomain(entity: DocumentModelEntity, familyName?: string): DocumentModel {
     const props: DocumentModelProps = {
       id: entity.id,
       groupId: entity.groupId,
@@ -113,6 +142,9 @@ export class TypeOrmDocumentModelRepository implements IDocumentModelRepository 
       requiredForContract: entity.requiredForContract,
       requiredForColaborator: entity.requiredForColaborator,
       requiredExpirationDate: entity.requiredExpirationDate,
+      requiresApproval: entity.requiresApproval,
+      requiresSignature: entity.requiresSignature,
+      familyName: familyName ?? entity.family?.name,
       documentTypeName: entity.documentType?.name,
       documentSubtypeName: entity.documentSubtype?.name,
       createdAt: entity.createdAt,
@@ -132,6 +164,8 @@ export class TypeOrmDocumentModelRepository implements IDocumentModelRepository 
       requiredForContract: documentModel.requiredForContract,
       requiredForColaborator: documentModel.requiredForColaborator,
       requiredExpirationDate: documentModel.requiredExpirationDate,
+      requiresApproval: documentModel.requiresApproval,
+      requiresSignature: documentModel.requiresSignature,
       createdAt: documentModel.createdAt,
       updatedAt: documentModel.updatedAt,
       deletedAt: documentModel.deletedAt,

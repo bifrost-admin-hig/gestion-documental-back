@@ -10,6 +10,9 @@ interface BaseUserProps {
   firstName: string;
   lastName: string;
   status?: string;
+  passwordNonce?: string | null;
+  rut?: string | null;
+  phone?: string | null;
   roles?: Role[];
   groups?: { id: number; name: string }[];
   createdAt?: DateType;
@@ -22,9 +25,7 @@ export interface CreateUserProps extends BaseUserProps {
   password: string;
 }
 
-export interface UpdateUserProps extends CreateUserProps {
-  id: string;
-}
+export type UpdateUserProps = Partial<CreateUserProps> & { id: string };
 
 export type UserJson = Overlap<BaseUserProps, {
   id: string;
@@ -51,6 +52,9 @@ export class User {
   lastName: string;
   password: string;
   status?: UserStatus;
+  passwordNonce: string | null;
+  rut: string | null;
+  phone: string | null;
   roles?: Role[];
   groups?: { id: number; name: string }[];
   createdAt: Date;
@@ -63,6 +67,9 @@ export class User {
       id: 'uuid',
       email: 'email',
       status: (status: string) => isValidUserStatus(status) ? status : UserStatus.ACTIVE,
+      passwordNonce: (v?: string | null) => v ?? null,
+      rut: (v?: string | null) => v || null,
+      phone: (v?: string | null) => v || null,
       createdAt: 'datetime',
       updatedAt: 'datetime',
       deletedAt: 'datetimeNullable',
@@ -82,9 +89,6 @@ export class User {
     }
     if (!props.password?.trim()) {
       throw new ValidationError('Password is required', 'password');
-    }
-    if (!props.roles?.length) {
-      throw new ValidationError('At least one role is required', 'roles');
     }
   }
 
@@ -140,6 +144,8 @@ export class User {
       lastName: this.lastName,
       fullName: `${this.firstName} ${this.lastName}`,
       status: this.status,
+      rut: this.rut,
+      phone: this.phone,
       roles: this.roles?.map(role => role.toJSON()) ?? [],
       groups: this.groups ?? [],
       createdAt: this.createdAt.toISOString(),

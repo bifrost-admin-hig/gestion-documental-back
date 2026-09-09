@@ -3,6 +3,9 @@ import { MigrationInterface, QueryRunner, TableColumn, TableForeignKey } from "t
 export class AddCompanyIdToContracts1770000000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const table = await queryRunner.getTable("contracts");
+    if (!table || table.findColumnByName("companyId")) return;
+
     await queryRunner.addColumn(
       "contracts",
       new TableColumn({

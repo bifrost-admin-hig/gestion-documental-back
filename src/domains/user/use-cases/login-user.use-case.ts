@@ -1,7 +1,8 @@
 import { UserRepository } from '@domains/user/repositories/user.repository';
 import { User } from '@domains/user/entities/user.entity';
 import * as bcrypt from 'bcryptjs';
-import { ValidationError } from '@shared/domain/errors';
+import { UnauthorizedError, ValidationError } from '@shared/domain/errors';
+import { UserStatus } from '../value-objects/user-status';
 
 export class LoginUserUseCase {
   constructor(private readonly userRepository: UserRepository) {}
@@ -17,6 +18,10 @@ export class LoginUserUseCase {
 
     if (!isPasswordValid) {
       throw new ValidationError('Invalid credentials', 'password');
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedError('Account is not active');
     }
 
     return user;

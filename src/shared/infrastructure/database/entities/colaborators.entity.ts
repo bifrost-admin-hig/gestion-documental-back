@@ -8,11 +8,14 @@ import {
   Index,
   ManyToMany,
   JoinTable,
+  OneToOne,
+  JoinColumn,
 } from 'typeorm';
 import { EnumColumn } from '@shared/infrastructure/database/entities/utils/decorators';
 import { ColaboratorGroupEntity } from './colaborator-group.entity';
 import { ContractEntity } from './contract.entity';
 import { DocumentEntity } from './document.entity';
+import { UserEntity } from './user.entity';
 
 @Entity('colaborators')
 @Index('IDX_colaborators_name_surname', ['nombre', 'apellidoPaterno'])
@@ -112,6 +115,13 @@ export class ColaboratorEntity {
 
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt!: Date | null;
+
+  @Column({ name: 'user_id', type: 'varchar', length: 36, nullable: true })
+  userId?: string | null;
+
+  @OneToOne(() => UserEntity, { nullable: true, eager: false, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'user_id' })
+  user?: UserEntity | null;
 
   @ManyToMany(() => ColaboratorGroupEntity, (group) => group.colaborators)
   groups!: ColaboratorGroupEntity[];

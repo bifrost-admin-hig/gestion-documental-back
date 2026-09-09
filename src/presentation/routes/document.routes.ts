@@ -26,6 +26,7 @@ export const createDocumentRoutes = (
     controller.createDocument,
   );
   router.post('/assign-to-group', authorize('document:create'), controller.assignDocumentsToGroup);
+  router.post('/download-zip', authorize('document:read'), controller.downloadZip);
 
   // GET routes - specific routes before parameterized routes
   router.get('/expired', authorize('document:read'), controller.getExpiredDocuments);
@@ -42,6 +43,9 @@ export const createDocumentRoutes = (
 
   // PUT routes
   router.put('/:id/send-to-review', authorize('document:update'), controller.sendToReview);
+
+  // Aprobación directa (sin pasar por revisión) - para revisores globales o revisores activos del contrato
+  router.put('/:id/approve-direct', authorize(['document:review', 'document:review:any']), contractReviewerMiddleware, controller.directApproveDocument);
 
   // Rutas de revisión - requieren permiso document:review Y ser revisor activo del contrato
   router.put('/:id/approve', authorize('document:review'), contractReviewerMiddleware, controller.approveDocument);

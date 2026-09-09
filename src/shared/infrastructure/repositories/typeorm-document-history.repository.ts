@@ -96,9 +96,11 @@ export class TypeOrmDocumentHistoryRepository implements DocumentHistoryReposito
       comment: entity.comment,
       action: entity.action,
       updatedBy: entity.updatedBy,
-      updatedByName: entity.updater?.firstName,
-      updatedByLastName: entity.updater?.lastName,
+      updatedByName: entity.updatedByName ?? entity.updater?.firstName,
+      updatedByLastName: entity.updatedByName ? undefined : entity.updater?.lastName,
       updatedAt: entity.updatedAt,
+      flowParticipantId: entity.flowParticipantId ?? null,
+      actionComment: entity.actionComment ?? null,
     });
   }
 
@@ -117,7 +119,10 @@ export class TypeOrmDocumentHistoryRepository implements DocumentHistoryReposito
       comment: history.comment || undefined,
       action: history.action,
       updatedBy: history.updatedBy,
+      updatedByName: history.updatedByName,
       updatedAt: history.updatedAt,
+      flowParticipantId: history.flowParticipantId ?? undefined,
+      actionComment: history.actionComment ?? undefined,
     };
   }
 }
