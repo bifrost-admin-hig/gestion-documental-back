@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { randomBytes } from 'crypto';
 
 /**
  * FileUtils utility class for handling file operations
@@ -74,13 +75,19 @@ export default class FileUtils {
   }
 
   /**
-   * Generate a unique filename with timestamp prefix
+   * Generate a unique filename with timestamp + random suffix.
+   * El sufijo aleatorio es necesario además del timestamp: varios llamadores (ej. las
+   * firmas dibujadas en `signature-flow`) guardan siempre con el mismo `originalFilename`
+   * (p.ej. "signature.png"), así que dos requests concurrentes en el mismo milisegundo
+   * generarían el mismo nombre — y por lo tanto el mismo path local y la misma key de S3 —
+   * pisándose el archivo entre sí.
    * @param originalFilename - Original filename
-   * @returns Unique filename with timestamp
+   * @returns Unique filename with timestamp and random suffix
    */
   public static generateUniqueFilename(originalFilename: string): string {
     const basename = path.basename(originalFilename);
-    return `${Date.now()}-${basename}`;
+    const uniqueSuffix = randomBytes(8).toString('hex');
+    return `${Date.now()}-${uniqueSuffix}-${basename}`;
   }
 
   /**

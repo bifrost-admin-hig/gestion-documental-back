@@ -193,19 +193,22 @@ export class ValidateSignatureCodeUseCase {
 
       const verifyUrl = this.buildVerifyUrl(document.id, tokenHash);
 
-      const stampedBytes = await this.pdfStampService.stampPdf(stampTarget, {
+      const { bytes: signatureImageBytes, reason: missingSignatureReason } = await this.loadSignatureImageBytes(signatureImageFileId);
+
+      const { bytes: stampedBytes, signatureWarning } = await this.pdfStampService.stampPdf(stampTarget, {
         signerName: `${user.firstName} ${user.lastName}`,
         signerDocumentNumber,
         signerEmail: String(user.email),
         signedAt,
-        signatureImageBytes: await this.loadSignatureImageBytes(signatureImageFileId),
+        signatureImageBytes,
         ipAddress,
         documentId: document.id,
         tokenHash,
         verifyUrl,
       });
 
-      await this.persistStampedDocument(document, stampedBytes, userId);
+      const signatureIssue = missingSignatureReason ?? signatureWarning;
+      await this.persistStampedDocument(document, stampedBytes, userId, signatureIssue);
       return true;
     } catch (err) {
       console.warn('[ValidateSignatureCodeUseCase] PDF stamping failed (non-critical):', err);
@@ -219,7 +222,12 @@ export class ValidateSignatureCodeUseCase {
    * original ante cualquier error — mismo patrón que ya usa UpdateDocumentUseCase al
    * reemplazar el archivo de un documento.
    */
-  private async persistStampedDocument(document: Document, stampedBytes: Buffer, userId: string): Promise<void> {
+  private async persistStampedDocument(
+    document: Document,
+    stampedBytes: Buffer,
+    userId: string,
+    signatureIssue?: string,
+  ): Promise<void> {
     if (!this.fileRepository) return;
 
     const previousDocumentUrl = document.documentUrl;
@@ -243,6 +251,10 @@ export class ValidateSignatureCodeUseCase {
     }
     await this.documentRepository.update(document);
 
+    const comment = signatureIssue
+      ? `Documento firmado electrónicamente. Aviso: no se pudo incluir el dibujo de la firma (${signatureIssue}).`
+      : 'Documento firmado electrónicamente.';
+
     if (archived && this.documentVersioningService) {
       await this.documentVersioningService.recordFileReplacedHistory({
         liveDocument: document,
@@ -250,20 +262,23 @@ export class ValidateSignatureCodeUseCase {
         previousDocumentUrl,
         action: DocumentAction.SIGNATURE_SIGNED,
         updatedBy: userId,
-        comment: 'Documento firmado electrónicamente.',
+        comment,
       });
     }
   }
 
-  private async loadSignatureImageBytes(fileId: string | null): Promise<Buffer | undefined> {
-    if (!fileId || !this.fileRepository) return undefined;
+  private async loadSignatureImageBytes(fileId: string | null): Promise<{ bytes?: Buffer; reason?: string }> {
+    if (!fileId) return { reason: 'la firma dibujada nunca quedó asociada a un archivo guardado' };
+    if (!this.fileRepository) return { reason: 'el repositorio de archivos no está disponible' };
     try {
       const file = await this.fileRepository.findById(fileId);
-      if (!file) return undefined;
-      return await this.fileRepository.getContent(file);
+      if (!file) return { reason: `no se encontró el archivo guardado (id ${fileId})` };
+      const bytes = await this.fileRepository.getContent(file);
+      return { bytes };
     } catch (err) {
-      console.warn('[ValidateSignatureCodeUseCase] No se pudo cargar la imagen de la firma (no crítico):', err);
-      return undefined;
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn(`[ValidateSignatureCodeUseCase] loadSignatureImageBytes: fallo leyendo File ${fileId} (no crítico):`, err);
+      return { reason: `no se pudo leer el archivo guardado (id ${fileId}): ${reason}` };
     }
   }
 

@@ -569,6 +569,7 @@ export class ProcessFlowParticipantActionUseCase {
 
       const documentSignatures = await this.signatureRepository.findByDocumentId(document.id);
       const signerData: SignerStampData[] = [];
+      const missingSignatureReasons: string[] = [];
       for (const s of signedSigners) {
         if (s.userId) {
           // Internal signer — look up Signature record for tokenHash/IP
@@ -584,12 +585,15 @@ export class ProcessFlowParticipantActionUseCase {
             ? await this.colaboratorRepository.findByUserId(s.userId)
             : null;
 
+          const { bytes, reason } = await this.loadSignatureImageBytes(signature.signatureImageFileId);
+          if (reason) missingSignatureReasons.push(`${user.firstName} ${user.lastName}: ${reason}`);
+
           signerData.push({
             signerName: `${user.firstName} ${user.lastName}`,
             signerDocumentNumber: colaborator?.numeroDocumento ?? 'N/A',
             signerEmail: String(user.email),
             signedAt: signature.signedAt ?? s.actionAt ?? new Date(),
-            signatureImageBytes: await this.loadSignatureImageBytes(signature.signatureImageFileId),
+            signatureImageBytes: bytes,
             ipAddress: signature.ipAddress ?? 'N/A',
             tokenHash: signature.tokenHash,
           });
@@ -599,12 +603,15 @@ export class ProcessFlowParticipantActionUseCase {
             ? await this.externalTokenRepository.findByParticipantId(s.id)
             : null;
 
+          const { bytes, reason } = await this.loadSignatureImageBytes(extToken?.signatureImageFileId ?? null);
+          if (reason) missingSignatureReasons.push(`${s.externalName ?? 'Firmante externo'}: ${reason}`);
+
           signerData.push({
             signerName: s.externalName ?? 'Firmante externo',
             signerDocumentNumber: extToken?.documentNumber ?? 'N/A',
             signerEmail: s.externalEmail,
             signedAt: s.actionAt ?? new Date(),
-            signatureImageBytes: await this.loadSignatureImageBytes(extToken?.signatureImageFileId ?? null),
+            signatureImageBytes: bytes,
             ipAddress: extToken?.ipAddress ?? 'N/A',
             tokenHash: extToken?.signatureTokenHash ?? 'N/A',
           });
@@ -615,14 +622,19 @@ export class ProcessFlowParticipantActionUseCase {
 
       const verifyUrl = buildFrontendUrl(`/verificar?id=${document.id}`) ?? `/verificar?id=${document.id}`;
 
-      const stampedBytes = await this.pdfStampService.stampConsolidatedPdf(stampTarget, {
+      const { bytes: stampedBytes, signerWarnings } = await this.pdfStampService.stampConsolidatedPdf(stampTarget, {
         documentId: document.id,
         completedAt: new Date(),
         verifyUrl,
         signers: signerData,
       });
 
-      await this.persistStampedDocument(document, stampedBytes);
+      const allReasons = [
+        ...missingSignatureReasons,
+        ...signerWarnings.map((w) => `${w.signerName}: ${w.reason}`),
+      ];
+
+      await this.persistStampedDocument(document, stampedBytes, allReasons);
     } catch (err) {
       console.warn('[ProcessFlowParticipantActionUseCase] Consolidated PDF stamping failed (non-critical):', err);
     }
@@ -633,8 +645,15 @@ export class ProcessFlowParticipantActionUseCase {
    * archiva la versión previa del documento, para poder compararlas o recuperar el
    * original ante cualquier error — mismo patrón que ya usa UpdateDocumentUseCase al
    * reemplazar el archivo de un documento.
+   * `signatureIssues`, si viene, queda registrado en el Historial: es la única forma en
+   * que alguien sin acceso a los logs del servidor puede enterarse de que el dibujo de
+   * la firma de algún firmante no se pudo incluir en el PDF.
    */
-  private async persistStampedDocument(document: Document, stampedBytes: Buffer): Promise<void> {
+  private async persistStampedDocument(
+    document: Document,
+    stampedBytes: Buffer,
+    signatureIssues: string[] = [],
+  ): Promise<void> {
     if (!this.fileRepository) return;
 
     const previousDocumentUrl = document.documentUrl;
@@ -658,6 +677,10 @@ export class ProcessFlowParticipantActionUseCase {
     }
     await this.documentRepository.update(document);
 
+    const comment = signatureIssues.length > 0
+      ? `Todos los firmantes completaron la firma. Aviso: no se pudo incluir el dibujo de la firma de: ${signatureIssues.join('; ')}.`
+      : 'Todos los firmantes completaron la firma.';
+
     if (archived && this.documentVersioningService) {
       await this.documentVersioningService.recordFileReplacedHistory({
         liveDocument: document,
@@ -665,20 +688,23 @@ export class ProcessFlowParticipantActionUseCase {
         previousDocumentUrl,
         action: DocumentAction.VERSION_SUPERSEDED,
         updatedByName: 'Sistema',
-        comment: 'Todos los firmantes completaron la firma.',
+        comment,
       });
     }
   }
 
-  private async loadSignatureImageBytes(fileId: string | null): Promise<Buffer | undefined> {
-    if (!fileId || !this.fileRepository) return undefined;
+  private async loadSignatureImageBytes(fileId: string | null): Promise<{ bytes?: Buffer; reason?: string }> {
+    if (!fileId) return { reason: 'la firma dibujada nunca quedó asociada a un archivo guardado' };
+    if (!this.fileRepository) return { reason: 'el repositorio de archivos no está disponible' };
     try {
       const file = await this.fileRepository.findById(fileId);
-      if (!file) return undefined;
-      return await this.fileRepository.getContent(file);
+      if (!file) return { reason: `no se encontró el archivo guardado (id ${fileId})` };
+      const bytes = await this.fileRepository.getContent(file);
+      return { bytes };
     } catch (err) {
-      console.warn('[ProcessFlowParticipantActionUseCase] No se pudo cargar la imagen de la firma (no crítico):', err);
-      return undefined;
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn(`[ProcessFlowParticipantActionUseCase] loadSignatureImageBytes: fallo leyendo File ${fileId} (no crítico):`, err);
+      return { reason: `no se pudo leer el archivo guardado (id ${fileId}): ${reason}` };
     }
   }
 
